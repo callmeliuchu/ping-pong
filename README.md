@@ -108,12 +108,36 @@ models/passed/ppo_stage6_rules.zip
 models/passed/ppo_stage6.zip
 ```
 
-## Validate All Stages
+## Stage 7: Realistic Paddle and Spin
 
-Run the full six-stage gate check:
+Stage 7 keeps the Stage 6 rule checks and adds a more human-like control model:
+the paddle can move forward/back and up/down, rotate its face, generate spin on
+contact, and the ball reacts to spin after table bounces. The PPO action is a
+continuous three-axis residual over a low-level tracking controller, which makes
+the agent train on realistic timing and paddle-face adjustments instead of just
+teleporting to the ball.
+
+Train and watch the Stage 7 policy:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100
+python -m train.train_realistic --timesteps 500000
+python -m train.evaluate_realistic --episodes 100
+python -m train.evaluate_realistic --render --episodes 0
+python -m play.watch_stage7
+```
+
+The trained Stage 7 model is available at:
+
+```text
+models/passed/ppo_stage7.zip
+```
+
+## Validate All Stages
+
+Run the full seven-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100
 ```
 
 Passing models are copied to:
@@ -125,6 +149,7 @@ models/passed/ppo_stage3.zip
 models/passed/ppo_stage4.zip
 models/passed/ppo_stage5.zip
 models/passed/ppo_stage6.zip
+models/passed/ppo_stage7.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.

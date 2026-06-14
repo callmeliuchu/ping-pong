@@ -68,25 +68,43 @@ class PygameRenderer:
             3,
         )
         self._draw_ball(env.ball_x, env.ball_y, env.config.ball_radius)
-        self._draw_paddle(
-            env.config.paddle_x,
-            env.agent_y,
-            env.config.paddle_width,
-            env.config.paddle_height,
-            (90, 170, 255),
-        )
-        self._draw_paddle(
-            env.config.opponent_x,
-            env.opponent_y,
-            env.config.paddle_width,
-            env.config.paddle_height,
-            (255, 120, 120),
-        )
+        if hasattr(env, "agent_angle"):
+            self._draw_rotated_paddle(
+                env.agent_x,
+                env.agent_y,
+                env.config.paddle_width,
+                env.config.paddle_height,
+                env.agent_angle,
+                (90, 170, 255),
+            )
+            self._draw_rotated_paddle(
+                env.opponent_x,
+                env.opponent_y,
+                env.config.paddle_width,
+                env.config.paddle_height,
+                env.opponent_angle,
+                (255, 120, 120),
+            )
+        else:
+            self._draw_paddle(
+                env.config.paddle_x,
+                env.agent_y,
+                env.config.paddle_width,
+                env.config.paddle_height,
+                (90, 170, 255),
+            )
+            self._draw_paddle(
+                env.config.opponent_x,
+                env.opponent_y,
+                env.config.paddle_width,
+                env.config.paddle_height,
+                (255, 120, 120),
+            )
         if hasattr(env, "rally_length"):
-            gravity_mode = "rules" if getattr(env.config, "rules_enabled", False) else "rally"
+            gravity_mode = "realistic" if hasattr(env, "ball_spin") else ("rules" if getattr(env.config, "rules_enabled", False) else "rally")
             status = (
                 f"{gravity_mode}  rally {env.rally_length}/{env.config.target_rally_length}  "
-                f"reason {getattr(env, 'point_reason', 'in_play')}"
+                f"spin {getattr(env, 'ball_spin', 0.0):.1f}  reason {getattr(env, 'point_reason', 'in_play')}"
             )
             text = self.font.render(status, True, (220, 230, 235))
             self.screen.blit(text, (16, 14))
@@ -127,6 +145,26 @@ class PygameRenderer:
                 height,
             ),
         )
+
+    def _draw_rotated_paddle(
+        self,
+        x: float,
+        y: float,
+        width: int,
+        height: int,
+        angle: float,
+        color: tuple[int, int, int],
+    ) -> None:
+        cos_a = float(np.cos(angle))
+        sin_a = float(np.sin(angle))
+        half_w = width / 2
+        half_h = height / 2
+        corners = []
+        for local_x, local_y in ((-half_w, -half_h), (half_w, -half_h), (half_w, half_h), (-half_w, half_h)):
+            world_x = x + cos_a * local_x + sin_a * local_y
+            world_y = y - sin_a * local_x + cos_a * local_y
+            corners.append((int(world_x), int(world_y)))
+        pygame.draw.polygon(self.screen, color, corners)
 
     def _finish(self, env, mode: str):
         if mode == "rgb_array":
