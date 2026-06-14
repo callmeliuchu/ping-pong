@@ -10,40 +10,125 @@ class PygameRenderer:
         self.width = width
         self.height = height
         self.screen = pygame.display.set_mode((width, height))
-        pygame.display.set_caption("Ping Pong RL - Stage 1 Catch")
+        pygame.display.set_caption("Ping Pong RL")
         self.clock = pygame.time.Clock()
+        self.font = pygame.font.SysFont("Arial", 18)
 
     def render_catch(self, env, mode: str = "human"):
+        self._pump_events(env)
+        self._draw_background()
+        self._draw_ball(env.ball_x, env.ball_y, env.config.ball_radius)
+        self._draw_paddle(
+            env.config.agent_x,
+            env.agent_y,
+            env.config.paddle_width,
+            env.config.paddle_height,
+            (90, 170, 255),
+        )
+        return self._finish(env, mode)
+
+    def render_pong(self, env, mode: str = "human"):
+        self._pump_events(env)
+        self._draw_background()
+        self._draw_ball(env.ball_x, env.ball_y, env.config.ball_radius)
+        self._draw_paddle(
+            env.config.agent_x,
+            env.agent_y,
+            env.config.paddle_width,
+            env.config.paddle_height,
+            (90, 170, 255),
+        )
+        self._draw_paddle(
+            env.opponent_x,
+            env.opponent_y,
+            env.config.paddle_width,
+            env.config.paddle_height,
+            (255, 120, 120),
+        )
+        return self._finish(env, mode)
+
+    def render_gravity(self, env, mode: str = "human"):
+        self._pump_events(env)
+        self.screen.fill((18, 24, 30))
+        pygame.draw.rect(
+            self.screen,
+            (58, 108, 124),
+            pygame.Rect(
+                env.config.table_left,
+                env.config.table_y,
+                env.config.table_right - env.config.table_left,
+                12,
+            ),
+        )
+        pygame.draw.line(
+            self.screen,
+            (220, 230, 235),
+            (env.config.net_x, env.config.table_y),
+            (env.config.net_x, env.config.table_y - env.config.net_height),
+            3,
+        )
+        self._draw_ball(env.ball_x, env.ball_y, env.config.ball_radius)
+        self._draw_paddle(
+            env.config.paddle_x,
+            env.agent_y,
+            env.config.paddle_width,
+            env.config.paddle_height,
+            (90, 170, 255),
+        )
+        self._draw_paddle(
+            env.config.opponent_x,
+            env.opponent_y,
+            env.config.paddle_width,
+            env.config.paddle_height,
+            (255, 120, 120),
+        )
+        if hasattr(env, "rally_length"):
+            gravity_mode = "rules" if getattr(env.config, "rules_enabled", False) else "rally"
+            status = (
+                f"{gravity_mode}  rally {env.rally_length}/{env.config.target_rally_length}  "
+                f"reason {getattr(env, 'point_reason', 'in_play')}"
+            )
+            text = self.font.render(status, True, (220, 230, 235))
+            self.screen.blit(text, (16, 14))
+        return self._finish(env, mode)
+
+    def _pump_events(self, env) -> None:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 env.close()
                 raise SystemExit
 
+    def _draw_background(self) -> None:
         self.screen.fill((20, 24, 28))
         pygame.draw.line(
             self.screen,
             (70, 76, 84),
-            (env.config.width // 2, 0),
-            (env.config.width // 2, env.config.height),
+            (self.width // 2, 0),
+            (self.width // 2, self.height),
             2,
         )
+
+    def _draw_ball(self, x: float, y: float, radius: int) -> None:
         pygame.draw.circle(
             self.screen,
             (242, 244, 248),
-            (int(env.ball_x), int(env.ball_y)),
-            env.config.ball_radius,
+            (int(x), int(y)),
+            radius,
         )
+
+    def _draw_paddle(self, x: float, y: float, width: int, height: int, color: tuple[int, int, int]) -> None:
         pygame.draw.rect(
             self.screen,
-            (90, 170, 255),
+            color,
             pygame.Rect(
-                env.config.agent_x - env.config.paddle_width / 2,
-                env.agent_y - env.config.paddle_height / 2,
-                env.config.paddle_width,
-                env.config.paddle_height,
+                x - width / 2,
+                y - height / 2,
+                width,
+                height,
             ),
         )
 
+    def _finish(self, env, mode: str):
         if mode == "rgb_array":
             return np.transpose(
                 pygame.surfarray.array3d(self.screen),
@@ -56,4 +141,3 @@ class PygameRenderer:
 
     def close(self):
         pygame.quit()
-
