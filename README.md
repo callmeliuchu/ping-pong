@@ -234,12 +234,48 @@ The trained Stage 11 model is available at:
 models/passed/ppo_stage11.zip
 ```
 
-## Validate All Stages
+## Stage 12: League Self-Play Bootstrap
 
-Run the full eleven-stage gate check:
+Stage 12 starts the growth loop from the latest Stage 11 technique model. The
+agent trains against a historical PPO opponent loaded from the league archive,
+then saves the new generation back into `models/selfplay/stage12/`. This is a
+bootstrap self-play loop: each generation can use the previous generation as
+both the starting policy and the opponent, so the agent repeatedly learns to
+beat its last version.
+
+The current Stage 12 gate checks that the historical model is really loaded,
+the new policy wins reliably against Stage 11, and the rally still includes
+basic topspin loop landings. It is not yet a full Elo league with many
+opponents and automatic promotion/demotion.
+
+Train, evaluate, and watch the Stage 12 policy:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100
+python -m train.train_selfplay_stage12 --generation 1 --base-model-path models/passed/ppo_stage11 --opponent-model-path models/passed/ppo_stage11 --timesteps 200000
+python -m train.evaluate_selfplay --model-path models/passed/ppo_stage12 --opponent-model-path models/passed/ppo_stage11 --episodes 100
+python -m train.evaluate_selfplay --model-path models/passed/ppo_stage12 --opponent-model-path models/passed/ppo_stage11 --render --episodes 0
+python -m play.watch_stage12
+```
+
+Continue with the next generation:
+
+```bash
+python -m train.train_selfplay_stage12 --generation 2 --base-model-path models/passed/ppo_stage12 --opponent-model-path models/selfplay/stage12/gen_1 --model-path models/ppo_selfplay_stage12_gen2 --timesteps 200000
+```
+
+The trained Stage 12 model is available at:
+
+```text
+models/passed/ppo_stage12.zip
+models/selfplay/stage12/gen_1.zip
+```
+
+## Validate All Stages
+
+Run the full twelve-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100
 ```
 
 Passing models are copied to:
@@ -256,6 +292,7 @@ models/passed/ppo_stage8.zip
 models/passed/ppo_stage9.zip
 models/passed/ppo_stage10.zip
 models/passed/ppo_stage11.zip
+models/passed/ppo_stage12.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.
