@@ -156,12 +156,35 @@ The trained Stage 8 model is available at:
 models/passed/ppo_stage8.zip
 ```
 
-## Validate All Stages
+## Stage 9: Advanced Strokes
 
-Run the full eight-stage gate check:
+Stage 9 expands the Stage 8 competitive setup into a more realistic stroke
+prototype. The paddle can move outside the table edge, recover from farther
+positions, and use continuous power plus brush controls to produce drives,
+loops, smashes, and chops. Stage 9 also flips the advanced topspin flight model
+so positive topspin pulls the ball down into a loop arc instead of floating.
+
+Train and watch the Stage 9 policy:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100
+python -m train.train_advanced --timesteps 600000
+python -m train.evaluate_advanced --episodes 100
+python -m train.evaluate_advanced --render --episodes 0
+python -m play.watch_stage9
+```
+
+The trained Stage 9 model is available at:
+
+```text
+models/passed/ppo_stage9.zip
+```
+
+## Validate All Stages
+
+Run the full nine-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100
 ```
 
 Passing models are copied to:
@@ -175,6 +198,7 @@ models/passed/ppo_stage5.zip
 models/passed/ppo_stage6.zip
 models/passed/ppo_stage7.zip
 models/passed/ppo_stage8.zip
+models/passed/ppo_stage9.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.

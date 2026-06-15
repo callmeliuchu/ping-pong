@@ -8,8 +8,17 @@ from typing import Any
 
 from stable_baselines3.common.env_checker import check_env
 
-from pingpong_rl.envs import CatchEnv, CompetitiveRealisticEnv, GravityPingPongEnv, PongEnv, RealisticPingPongEnv, make_pong_config
+from pingpong_rl.envs import (
+    AdvancedStrokesEnv,
+    CatchEnv,
+    CompetitiveRealisticEnv,
+    GravityPingPongEnv,
+    PongEnv,
+    RealisticPingPongEnv,
+    make_pong_config,
+)
 from train.eval_utils import ROOT, evaluate_pong, evaluate_stage1, smoke_gravity, write_metrics
+from train.evaluate_advanced import evaluate_advanced_model
 from train.evaluate_gravity import evaluate_gravity_model
 from train.evaluate_realistic import evaluate_realistic_model
 from train.evaluate_competitive import evaluate_competitive_model
@@ -53,6 +62,7 @@ def _check_envs() -> None:
     check_env(GravityPingPongEnv())
     check_env(RealisticPingPongEnv())
     check_env(CompetitiveRealisticEnv())
+    check_env(AdvancedStrokesEnv())
 
 
 def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
@@ -118,6 +128,20 @@ def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
             and metrics["avg_reward"] > 0.0,
             "normal_end_rate >= 0.85, win_rate >= 0.60, avg_rally_length >= 6.0, attack_attempt_rate >= 0.05, attack_success_rate >= 0.25, attack_landing_rate >= 0.20, avg_abs_spin >= 0.25, avg_paddle_x_range >= 35, avg_reward > 0",
         )
+    if stage == 9:
+        return (
+            metrics["normal_end_rate"] >= 0.60
+            and metrics["win_rate"] >= 0.50
+            and metrics["avg_rally_length"] >= 15.0
+            and metrics["outside_play_rate"] >= 0.75
+            and metrics["outside_hit_rate"] >= 0.50
+            and metrics["loop_landing_rate"] >= 0.50
+            and metrics["drive_landing_rate"] >= 0.15
+            and metrics["avg_max_topspin"] >= 3.0
+            and metrics["avg_paddle_x_range"] >= 120.0
+            and metrics["avg_reward"] > 0.0,
+            "normal_end_rate >= 0.60, win_rate >= 0.50, avg_rally_length >= 15, outside_play_rate >= 0.75, outside_hit_rate >= 0.50, loop_landing_rate >= 0.50, drive_landing_rate >= 0.15, avg_max_topspin >= 3, avg_paddle_x_range >= 120, avg_reward > 0",
+        )
     raise ValueError(stage)
 
 
@@ -131,6 +155,7 @@ def _suggestion(stage: int) -> str:
         6: "python -m train.train_gravity --load-model-path models/ppo_gravity_stage6 --timesteps 500000",
         7: "python -m train.train_realistic --timesteps 500000",
         8: "python -m train.train_competitive --timesteps 500000",
+        9: "python -m train.train_advanced --timesteps 600000",
     }
     return suggestions[stage]
 
@@ -170,11 +195,18 @@ def _print_table(results: list[StageResult]) -> None:
                 f"spin={metrics['avg_abs_spin']:.2f}, contact={metrics['avg_contact_quality']:.2f}, "
                 f"reward={metrics['avg_reward']:.3f}"
             )
-        else:
+        elif result.stage == 8:
             key_metrics = (
                 f"win={metrics['win_rate']:.3f}, rally={metrics['avg_rally_length']:.2f}, "
                 f"attempt={metrics['attack_attempt_rate']:.3f}, attack={metrics['attack_success_rate']:.3f}, "
                 f"land={metrics['attack_landing_rate']:.3f}, spin={metrics['avg_abs_spin']:.2f}, "
+                f"x_range={metrics['avg_paddle_x_range']:.1f}, reward={metrics['avg_reward']:.3f}"
+            )
+        else:
+            key_metrics = (
+                f"win={metrics['win_rate']:.3f}, rally={metrics['avg_rally_length']:.2f}, "
+                f"outside={metrics['outside_hit_rate']:.3f}, loop={metrics['loop_landing_rate']:.3f}, "
+                f"drive={metrics['drive_landing_rate']:.3f}, top={metrics['avg_max_topspin']:.2f}, "
                 f"x_range={metrics['avg_paddle_x_range']:.1f}, reward={metrics['avg_reward']:.3f}"
             )
         print(f"{result.stage} | {'PASS' if result.passed else 'FAIL'} | {key_metrics} | {result.reason}")
@@ -187,11 +219,12 @@ def _print_table(results: list[StageResult]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate all eight ping pong RL stages.")
+    parser = argparse.ArgumentParser(description="Validate all nine ping pong RL stages.")
     parser.add_argument("--episodes", type=int, default=200)
     parser.add_argument("--stage6-episodes", type=int, default=100)
     parser.add_argument("--stage7-episodes", type=int, default=100)
     parser.add_argument("--stage8-episodes", type=int, default=100)
+    parser.add_argument("--stage9-episodes", type=int, default=100)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--skip-check-env", action="store_true")
     parser.add_argument("--json-dir", type=Path, default=ROOT / "logs" / "validation")
@@ -211,6 +244,7 @@ def main() -> None:
         6: _preferred_model_path(6, ROOT / "models" / "ppo_gravity_stage6"),
         7: _preferred_model_path(7, ROOT / "models" / "ppo_realistic_stage7"),
         8: _preferred_model_path(8, ROOT / "models" / "ppo_competitive_stage8"),
+        9: _preferred_model_path(9, ROOT / "models" / "ppo_advanced_stage9"),
     }
 
     raw_results: list[tuple[int, dict[str, Any], Path | None]] = [
@@ -232,6 +266,7 @@ def main() -> None:
         (6, evaluate_gravity_model(stage_models[6], args.stage6_episodes, seed=args.seed), stage_models[6]),
         (7, evaluate_realistic_model(stage_models[7], args.stage7_episodes, seed=args.seed), stage_models[7]),
         (8, evaluate_competitive_model(stage_models[8], args.stage8_episodes, seed=args.seed), stage_models[8]),
+        (9, evaluate_advanced_model(stage_models[9], args.stage9_episodes, seed=args.seed), stage_models[9]),
     ]
 
     results: list[StageResult] = []
