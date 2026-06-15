@@ -67,6 +67,7 @@ class PygameRenderer:
             (env.config.net_x, env.config.table_y - env.config.net_height),
             3,
         )
+        self._draw_trail(getattr(env, "ball_trail", []))
         self._draw_ball(env.ball_x, env.ball_y, env.config.ball_radius)
         if hasattr(env, "agent_angle"):
             self._draw_rotated_paddle(
@@ -101,7 +102,9 @@ class PygameRenderer:
                 (255, 120, 120),
             )
         if hasattr(env, "rally_length"):
-            if hasattr(env, "compact_technique_hits"):
+            if hasattr(env, "style_match_landings"):
+                gravity_mode = f"variety {getattr(env, 'last_target_style', 'none')}"
+            elif hasattr(env, "compact_technique_hits"):
                 gravity_mode = f"compact {getattr(env, 'last_stroke_type', 'none')}"
             elif hasattr(env, "loop_attempts"):
                 gravity_mode = f"advanced {getattr(env, 'last_stroke_type', 'none')}"
@@ -142,6 +145,20 @@ class PygameRenderer:
             (int(x), int(y)),
             radius,
         )
+
+    def _draw_trail(self, trail: list[tuple[float, float]]) -> None:
+        if len(trail) < 2:
+            return
+        points = [(int(x), int(y)) for x, y in trail[-70:]]
+        for index, point in enumerate(points):
+            alpha = index / max(len(points) - 1, 1)
+            color = (
+                int(90 + 120 * alpha),
+                int(150 + 80 * alpha),
+                int(255 - 70 * alpha),
+            )
+            radius = 2 if index < len(points) - 10 else 3
+            pygame.draw.circle(self.screen, color, point, radius)
 
     def _draw_paddle(self, x: float, y: float, width: int, height: int, color: tuple[int, int, int]) -> None:
         pygame.draw.rect(

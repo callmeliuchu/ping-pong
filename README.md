@@ -208,12 +208,38 @@ The trained Stage 10 model is available at:
 models/passed/ppo_stage10.zip
 ```
 
-## Validate All Stages
+## Stage 11: Varied Stroke Paths
 
-Run the full ten-stage gate check:
+Stage 11 focuses on making the rally visually less uniform. It keeps the
+compact closed-racket technique, then rotates the low-level stroke target
+between high loop, drive, loop, and smash. The renderer also draws a short ball
+trail so the arc and speed differences are visible in Pygame.
+
+The Stage 11 gate checks that the policy produces multiple landed stroke types,
+including high arcs, drives, and smashes, instead of only repeating the safest
+loop.
+
+Train and watch the Stage 11 policy:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100
+python -m train.train_variety --timesteps 300000
+python -m train.evaluate_variety --episodes 100
+python -m train.evaluate_variety --render --episodes 0
+python -m play.watch_stage11
+```
+
+The trained Stage 11 model is available at:
+
+```text
+models/passed/ppo_stage11.zip
+```
+
+## Validate All Stages
+
+Run the full eleven-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100
 ```
 
 Passing models are copied to:
@@ -229,6 +255,7 @@ models/passed/ppo_stage7.zip
 models/passed/ppo_stage8.zip
 models/passed/ppo_stage9.zip
 models/passed/ppo_stage10.zip
+models/passed/ppo_stage11.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.
