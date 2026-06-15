@@ -179,12 +179,35 @@ The trained Stage 9 model is available at:
 models/passed/ppo_stage9.zip
 ```
 
-## Validate All Stages
+## Stage 10: Compact Paddle Technique
 
-Run the full nine-stage gate check:
+Stage 10 keeps the Stage 9 stroke controls but uses a shorter, more realistic
+paddle. A drive, loop, or smash only counts as compact technique when the paddle
+face is angled enough at contact, so the agent can no longer rely on a long
+vertical blocker. The gate checks that angled contacts dominate, block returns
+stay low, and the compact paddle can still build long topspin rallies.
+
+Train and watch the Stage 10 policy:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100
+python -m train.train_compact --timesteps 400000
+python -m train.evaluate_compact --episodes 100
+python -m train.evaluate_compact --render --episodes 0
+python -m play.watch_stage10
+```
+
+The trained Stage 10 model is available at:
+
+```text
+models/passed/ppo_stage10.zip
+```
+
+## Validate All Stages
+
+Run the full ten-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100
 ```
 
 Passing models are copied to:
@@ -199,6 +222,7 @@ models/passed/ppo_stage6.zip
 models/passed/ppo_stage7.zip
 models/passed/ppo_stage8.zip
 models/passed/ppo_stage9.zip
+models/passed/ppo_stage10.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.

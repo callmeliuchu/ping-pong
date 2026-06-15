@@ -101,7 +101,9 @@ class PygameRenderer:
                 (255, 120, 120),
             )
         if hasattr(env, "rally_length"):
-            if hasattr(env, "loop_attempts"):
+            if hasattr(env, "compact_technique_hits"):
+                gravity_mode = f"compact {getattr(env, 'last_stroke_type', 'none')}"
+            elif hasattr(env, "loop_attempts"):
                 gravity_mode = f"advanced {getattr(env, 'last_stroke_type', 'none')}"
             elif hasattr(env, "attack_attempts"):
                 gravity_mode = "competitive"
