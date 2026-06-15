@@ -132,12 +132,36 @@ The trained Stage 7 model is available at:
 models/passed/ppo_stage7.zip
 ```
 
-## Validate All Stages
+## Stage 8: Competitive Realistic Point Play
 
-Run the full seven-stage gate check:
+Stage 8 turns the realistic physics prototype into competitive point play. The
+agent keeps the Stage 7 forward/back movement, vertical movement, paddle
+rotation, and spin control, then adds an attack-intent action. The opponent has
+randomized difficulty levels, moves forward/back as well as vertically, and is
+stable enough that the agent must build rallies and win points with deeper,
+spinnier attacks instead of waiting for easy misses.
+
+Train and watch the Stage 8 policy:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100
+python -m train.train_competitive --timesteps 500000
+python -m train.evaluate_competitive --episodes 100
+python -m train.evaluate_competitive --render --episodes 0
+python -m play.watch_stage8
+```
+
+The trained Stage 8 model is available at:
+
+```text
+models/passed/ppo_stage8.zip
+```
+
+## Validate All Stages
+
+Run the full eight-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100
 ```
 
 Passing models are copied to:
@@ -150,6 +174,7 @@ models/passed/ppo_stage4.zip
 models/passed/ppo_stage5.zip
 models/passed/ppo_stage6.zip
 models/passed/ppo_stage7.zip
+models/passed/ppo_stage8.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.

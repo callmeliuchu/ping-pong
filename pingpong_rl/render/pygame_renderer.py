@@ -101,7 +101,12 @@ class PygameRenderer:
                 (255, 120, 120),
             )
         if hasattr(env, "rally_length"):
-            gravity_mode = "realistic" if hasattr(env, "ball_spin") else ("rules" if getattr(env.config, "rules_enabled", False) else "rally")
+            if hasattr(env, "attack_attempts"):
+                gravity_mode = "competitive"
+            elif hasattr(env, "ball_spin"):
+                gravity_mode = "realistic"
+            else:
+                gravity_mode = "rules" if getattr(env.config, "rules_enabled", False) else "rally"
             status = (
                 f"{gravity_mode}  rally {env.rally_length}/{env.config.target_rally_length}  "
                 f"spin {getattr(env, 'ball_spin', 0.0):.1f}  reason {getattr(env, 'point_reason', 'in_play')}"
