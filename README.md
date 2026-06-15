@@ -182,10 +182,16 @@ models/passed/ppo_stage9.zip
 ## Stage 10: Compact Paddle Technique
 
 Stage 10 keeps the Stage 9 stroke controls but uses a shorter, more realistic
-paddle. A drive, loop, or smash only counts as compact technique when the paddle
-face is angled enough at contact, so the agent can no longer rely on a long
-vertical blocker. The gate checks that angled contacts dominate, block returns
-stay low, and the compact paddle can still build long topspin rallies.
+paddle. A loop only counts as compact technique when the left-side agent uses a
+closed racket face: the paddle top tilts forward toward the opponent, forming
+the acute angle used for topspin instead of the previous open/obtuse face. The
+gate checks that closed-angle contacts dominate, block returns stay low, and
+the compact paddle can still build topspin loop rallies.
+
+The spin model is still a 2D side-view approximation. Contact creates
+`ball_spin`; in Stage 9 and 10 positive topspin adds downward acceleration, so
+the ball can arc down into the table. It does not model full 3D sidespin or
+fluid dynamics.
 
 Train and watch the Stage 10 policy:
 

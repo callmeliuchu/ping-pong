@@ -148,18 +148,15 @@ def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
     if stage == 10:
         return (
             metrics["normal_end_rate"] >= 0.60
-            and metrics["win_rate"] >= 0.50
             and metrics["avg_rally_length"] >= 15.0
-            and metrics["outside_hit_rate"] >= 0.50
-            and metrics["loop_landing_rate"] >= 0.50
-            and metrics["drive_landing_rate"] >= 0.10
-            and metrics["avg_angled_hit_rate"] >= 0.70
-            and metrics["avg_compact_technique_rate"] >= 0.70
-            and metrics["compact_technique_landing_rate"] >= 0.50
-            and metrics["avg_block_rate"] <= 0.20
+            and metrics["loop_landing_rate"] >= 0.75
+            and metrics["avg_angled_hit_rate"] >= 0.85
+            and metrics["avg_compact_technique_rate"] >= 0.85
+            and metrics["compact_technique_landing_rate"] >= 0.75
+            and metrics["avg_block_rate"] <= 0.05
             and metrics["avg_max_topspin"] >= 3.0
             and metrics["avg_reward"] > 0.0,
-            "normal_end_rate >= 0.60, win_rate >= 0.50, avg_rally_length >= 15, outside_hit_rate >= 0.50, loop_landing_rate >= 0.50, drive_landing_rate >= 0.10, avg_angled_hit_rate >= 0.70, avg_compact_technique_rate >= 0.70, compact_technique_landing_rate >= 0.50, avg_block_rate <= 0.20, avg_max_topspin >= 3, avg_reward > 0",
+            "normal_end_rate >= 0.60, avg_rally_length >= 15, loop_landing_rate >= 0.75, avg_angled_hit_rate >= 0.85, avg_compact_technique_rate >= 0.85, compact_technique_landing_rate >= 0.75, avg_block_rate <= 0.05, avg_max_topspin >= 3, avg_reward > 0",
         )
     raise ValueError(stage)
 
