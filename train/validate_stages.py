@@ -14,16 +14,20 @@ from pingpong_rl.envs import (
     CompactTechniqueEnv,
     CompetitiveRealisticEnv,
     GravityPingPongEnv,
+    LeagueSelfPlayEnv,
     PongEnv,
     RealisticPingPongEnv,
+    SelfPlayVarietyEnv,
     VarietyTechniqueEnv,
     make_pong_config,
 )
+from pingpong_rl.envs.league_self_play_env import LeagueSelfPlayConfig
 from pingpong_rl.envs.self_play_variety_env import SelfPlayVarietyConfig
 from train.eval_utils import ROOT, evaluate_pong, evaluate_stage1, smoke_gravity, write_metrics
 from train.evaluate_advanced import evaluate_advanced_model
 from train.evaluate_compact import evaluate_compact_model
 from train.evaluate_gravity import evaluate_gravity_model
+from train.evaluate_league_stage13 import default_opponent_paths, evaluate_league_model
 from train.evaluate_realistic import evaluate_realistic_model
 from train.evaluate_competitive import evaluate_competitive_model
 from train.evaluate_selfplay import evaluate_selfplay_model
@@ -74,6 +78,16 @@ def _check_envs() -> None:
     check_env(
         SelfPlayVarietyEnv(
             config=SelfPlayVarietyConfig(opponent_model_path=str(ROOT / "models" / "passed" / "ppo_stage11"))
+        )
+    )
+    check_env(
+        LeagueSelfPlayEnv(
+            config=LeagueSelfPlayConfig(
+                opponent_model_paths=(
+                    str(ROOT / "models" / "passed" / "ppo_stage11"),
+                    str(ROOT / "models" / "passed" / "ppo_stage12"),
+                )
+            )
         )
     )
 
@@ -194,6 +208,20 @@ def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
             and metrics["avg_reward"] > 25.0,
             "opponent_loaded_rate >= 1.0, normal_end_rate >= 0.95, win_rate >= 0.70, hit_rate >= 0.90, avg_rally_length >= 1.5, loop_landing_rate >= 0.35, avg_reward > 25",
         )
+    if stage == 13:
+        return (
+            metrics["opponent_pool_size"] >= 4
+            and metrics["opponent_loaded_rate"] >= 1.0
+            and metrics["normal_end_rate"] >= 0.95
+            and metrics["pool_win_rate"] >= 0.49
+            and metrics["worst_opponent_win_rate"] >= 0.45
+            and metrics["hit_rate"] >= 0.95
+            and metrics["avg_rally_length"] >= 3.8
+            and metrics["loop_landing_rate"] >= 0.55
+            and metrics["drive_landing_rate"] >= 0.50
+            and metrics["estimated_elo_delta_vs_pool"] >= -10.0,
+            "opponent_pool_size >= 4, opponent_loaded_rate >= 1.0, normal_end_rate >= 0.95, pool_win_rate >= 0.49, worst_opponent_win_rate >= 0.45, hit_rate >= 0.95, avg_rally_length >= 3.8, loop_landing_rate >= 0.55, drive_landing_rate >= 0.50, estimated_elo_delta_vs_pool >= -10",
+        )
     raise ValueError(stage)
 
 
@@ -211,6 +239,7 @@ def _suggestion(stage: int) -> str:
         10: "python -m train.train_compact --timesteps 400000",
         11: "python -m train.train_variety --timesteps 300000",
         12: "python -m train.train_selfplay_stage12 --generation 1 --base-model-path models/passed/ppo_stage11 --opponent-model-path models/passed/ppo_stage11 --timesteps 200000",
+        13: "python -m train.train_league_stage13 --generation 3 --base-model-path models/passed/ppo_stage13 --timesteps 200000",
     }
     return suggestions[stage]
 
@@ -279,11 +308,18 @@ def _print_table(results: list[StageResult]) -> None:
                 f"arc={metrics['high_arc_rate']:.3f}, styles={metrics['avg_unique_styles_landed']:.2f}, "
                 f"top={metrics['avg_max_topspin']:.2f}, reward={metrics['avg_reward']:.3f}"
             )
-        else:
+        elif result.stage == 12:
             key_metrics = (
                 f"loaded={metrics['opponent_loaded_rate']:.3f}, win={metrics['win_rate']:.3f}, "
                 f"hit={metrics['hit_rate']:.3f}, rally={metrics['avg_rally_length']:.2f}, "
                 f"loop={metrics['loop_landing_rate']:.3f}, reward={metrics['avg_reward']:.3f}"
+            )
+        else:
+            key_metrics = (
+                f"pool={metrics['opponent_pool_size']}, win={metrics['pool_win_rate']:.3f}, "
+                f"worst={metrics['worst_opponent_win_rate']:.3f}, rally={metrics['avg_rally_length']:.2f}, "
+                f"loop={metrics['loop_landing_rate']:.3f}, drive={metrics['drive_landing_rate']:.3f}, "
+                f"elo={metrics['estimated_elo']:.1f}"
             )
         print(f"{result.stage} | {'PASS' if result.passed else 'FAIL'} | {key_metrics} | {result.reason}")
 
@@ -295,7 +331,7 @@ def _print_table(results: list[StageResult]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate all twelve ping pong RL stages.")
+    parser = argparse.ArgumentParser(description="Validate all thirteen ping pong RL stages.")
     parser.add_argument("--episodes", type=int, default=200)
     parser.add_argument("--stage6-episodes", type=int, default=100)
     parser.add_argument("--stage7-episodes", type=int, default=100)
@@ -304,6 +340,7 @@ def main() -> None:
     parser.add_argument("--stage10-episodes", type=int, default=100)
     parser.add_argument("--stage11-episodes", type=int, default=100)
     parser.add_argument("--stage12-episodes", type=int, default=100)
+    parser.add_argument("--stage13-episodes", type=int, default=100)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--skip-check-env", action="store_true")
     parser.add_argument("--json-dir", type=Path, default=ROOT / "logs" / "validation")
@@ -327,6 +364,7 @@ def main() -> None:
         10: _preferred_model_path(10, ROOT / "models" / "ppo_compact_stage10"),
         11: _preferred_model_path(11, ROOT / "models" / "ppo_variety_stage11"),
         12: _preferred_model_path(12, ROOT / "models" / "ppo_selfplay_stage12"),
+        13: _preferred_model_path(13, ROOT / "models" / "ppo_league_stage13"),
     }
 
     raw_results: list[tuple[int, dict[str, Any], Path | None]] = [
@@ -355,6 +393,11 @@ def main() -> None:
             12,
             evaluate_selfplay_model(stage_models[12], stage_models[11], args.stage12_episodes, seed=args.seed),
             stage_models[12],
+        ),
+        (
+            13,
+            evaluate_league_model(stage_models[13], default_opponent_paths(), args.stage13_episodes, seed=args.seed),
+            stage_models[13],
         ),
     ]
 

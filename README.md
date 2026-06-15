@@ -270,12 +270,48 @@ models/passed/ppo_stage12.zip
 models/selfplay/stage12/gen_1.zip
 ```
 
-## Validate All Stages
+## Stage 13: Multi-Model League Self-Play
 
-Run the full twelve-stage gate check:
+Stage 13 upgrades the bootstrap loop into a small league. Instead of training
+against only the previous generation, each episode samples from a pool of
+historical PPO opponents: Stage 10, Stage 11, Stage 12 generation 1, and the
+passed Stage 12 model. The league evaluator reports per-opponent win rates, a
+candidate-vs-pool win-rate matrix, the weakest opponent matchup, and an
+estimated Elo score derived from the win rates.
+
+Stage 13 also discourages short-point exploits. Historical opponents use a more
+stable safe-return model after contact, and the reward penalizes winning before
+a six-hit rally while rewarding opponent returns and sustained wins. This makes
+the model train against a harder, longer-rally pool instead of repeatedly
+forcing early net faults.
+
+Train, evaluate, and watch the Stage 13 policy:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100
+python -m train.train_league_stage13 --generation 2 --base-model-path models/passed/ppo_stage12 --timesteps 200000
+python -m train.evaluate_league_stage13 --model-path models/passed/ppo_stage13 --episodes 100
+python -m play.watch_stage13
+```
+
+Continue the league with the next generation:
+
+```bash
+python -m train.train_league_stage13 --generation 3 --base-model-path models/passed/ppo_stage13 --timesteps 200000
+```
+
+The trained Stage 13 model is available at:
+
+```text
+models/passed/ppo_stage13.zip
+models/selfplay/stage13/gen_2.zip
+```
+
+## Validate All Stages
+
+Run the full thirteen-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100
 ```
 
 Passing models are copied to:
@@ -293,6 +329,7 @@ models/passed/ppo_stage9.zip
 models/passed/ppo_stage10.zip
 models/passed/ppo_stage11.zip
 models/passed/ppo_stage12.zip
+models/passed/ppo_stage13.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.
