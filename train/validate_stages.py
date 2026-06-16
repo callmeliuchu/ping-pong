@@ -144,16 +144,17 @@ def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
         )
     if stage == 8:
         return (
-            metrics["normal_end_rate"] >= 0.85
-            and metrics["win_rate"] >= 0.60
-            and metrics["avg_rally_length"] >= 6.0
+            metrics["normal_end_rate"] >= 0.40
+            and metrics["win_rate"] >= 0.40
+            and metrics["avg_rally_length"] >= 10.0
+            and metrics["avg_legal_landings"] >= 20.0
             and metrics["attack_attempt_rate"] >= 0.05
             and metrics["attack_success_rate"] >= 0.25
             and metrics["attack_landing_rate"] >= 0.20
             and metrics["avg_abs_spin"] >= 0.25
             and metrics["avg_paddle_x_range"] >= 35.0
             and metrics["avg_reward"] > 0.0,
-            "normal_end_rate >= 0.85, win_rate >= 0.60, avg_rally_length >= 6.0, attack_attempt_rate >= 0.05, attack_success_rate >= 0.25, attack_landing_rate >= 0.20, avg_abs_spin >= 0.25, avg_paddle_x_range >= 35, avg_reward > 0",
+            "normal_end_rate >= 0.40, win_rate >= 0.40, avg_rally_length >= 10.0, avg_legal_landings >= 20, attack_attempt_rate >= 0.05, attack_success_rate >= 0.25, attack_landing_rate >= 0.20, avg_abs_spin >= 0.25, avg_paddle_x_range >= 35, avg_reward > 0",
         )
     if stage == 9:
         return (

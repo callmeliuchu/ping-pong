@@ -285,6 +285,11 @@ a six-hit rally while rewarding opponent returns and sustained wins. This makes
 the model train against a harder, longer-rally pool instead of repeatedly
 forcing early net faults.
 
+The physics now treats the net as a collision object instead of an instant
+fault trigger. A ball that clips the top of the net can slow down, pop up, and
+continue to the other side; a lower net impact rebounds from the net face. The
+point is decided later by normal landing/out/second-bounce rules.
+
 Train, evaluate, and watch the Stage 13 policy:
 
 ```bash

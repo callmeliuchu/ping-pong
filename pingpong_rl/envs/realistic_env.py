@@ -93,6 +93,8 @@ class RealisticPingPongEnv(gym.Env):
         self.point_winner = None
         self.point_reason = "in_play"
         self.last_contact_quality = 0.0
+        self.net_touches = 0
+        self.last_net_touch_step = -1000
 
     def reset(self, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
@@ -125,6 +127,8 @@ class RealisticPingPongEnv(gym.Env):
         self.point_winner = None
         self.point_reason = "in_play"
         self.last_contact_quality = 0.0
+        self.net_touches = 0
+        self.last_net_touch_step = -1000
         return self._get_obs(), self._get_info(False, False, False, False, False)
 
     def step(self, action):
@@ -260,7 +264,6 @@ class RealisticPingPongEnv(gym.Env):
 
     def _apply_rules_after_bounce(self, table_side: str | None, net_hit: bool) -> bool:
         if net_hit:
-            self._award_point("opponent" if self.last_hitter == "agent" else "agent", "net_fault")
             return False
         if table_side is None:
             return False
@@ -313,9 +316,31 @@ class RealisticPingPongEnv(gym.Env):
             self.ball_spin *= 0.72
             table_side = "agent" if self.ball_x < self.config.net_x else "opponent"
 
-        net_top = self.config.table_y - self.config.net_height
-        net_hit = bool(abs(self.ball_x - self.config.net_x) <= self.config.ball_radius and self.ball_y + self.config.ball_radius >= net_top)
+        net_hit = self._net_collision()
         return table_side, net_hit
+
+    def _net_collision(self) -> bool:
+        net_top = self.config.table_y - self.config.net_height
+        touches_net_x = abs(self.ball_x - self.config.net_x) <= self.config.ball_radius
+        touches_net_y = self.ball_y + self.config.ball_radius >= net_top and self.ball_y - self.config.ball_radius <= self.config.table_y
+        if not touches_net_x or not touches_net_y or self.steps - self.last_net_touch_step <= 2:
+            return False
+
+        self.net_touches += 1
+        self.last_net_touch_step = self.steps
+        top_overlap = self.ball_y + self.config.ball_radius - net_top
+        skimmed_top = top_overlap <= self.config.ball_radius * 0.85 and self.ball_vy >= -2.0
+        if skimmed_top:
+            self.ball_y = net_top - self.config.ball_radius - 0.5
+            self.ball_vy = -abs(self.ball_vy) * 0.35 - 0.55
+            self.ball_vx *= 0.62
+        else:
+            incoming_direction = 1.0 if self.ball_vx >= 0.0 else -1.0
+            self.ball_x = self.config.net_x - incoming_direction * (self.config.ball_radius + 0.75)
+            self.ball_vx = -self.ball_vx * 0.48
+            self.ball_vy *= 0.72
+        self.ball_spin *= 0.82
+        return True
 
     def _paddle_collision(self, paddle_x: float, paddle_y: float, angle: float) -> bool:
         dx = self.ball_x - paddle_x
@@ -541,6 +566,7 @@ class RealisticPingPongEnv(gym.Env):
             "avg_abs_spin": abs(self.ball_spin),
             "agent_angle": self.agent_angle,
             "contact_quality": self.last_contact_quality,
+            "net_touches": self.net_touches,
             "steps": self.steps,
         }
 
