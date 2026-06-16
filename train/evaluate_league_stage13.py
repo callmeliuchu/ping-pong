@@ -21,6 +21,7 @@ def default_opponent_paths() -> list[Path]:
         ROOT / "models" / "passed" / "ppo_stage11",
         ROOT / "models" / "selfplay" / "stage12" / "gen_1",
         ROOT / "models" / "passed" / "ppo_stage12",
+        ROOT / "models" / "passed" / "ppo_stage13_red",
     ]
     paths: list[Path] = []
     seen: set[Path] = set()
@@ -170,17 +171,98 @@ def evaluate_league_model(
     }
 
 
+def evaluate_red_challenge(
+    red_model_path: Path,
+    blue_model_path: Path,
+    episodes: int,
+    seed: int = 0,
+) -> dict[str, Any]:
+    """Evaluate a model loaded as the red-side mirrored opponent against a blue champion."""
+
+    blue_model = PPO.load(blue_model_path)
+    config = LeagueSelfPlayConfig(opponent_model_paths=(str(red_model_path),))
+    env = LeagueSelfPlayEnv(config=config)
+    totals = {
+        "terminated": 0,
+        "truncated": 0,
+        "red_scores": 0,
+        "blue_scores": 0,
+        "blue_hits": 0,
+        "red_hits": 0,
+        "hit_episodes": 0,
+        "rally": 0,
+        "reward": 0.0,
+        "steps": 0,
+        "opponent_loaded": 0,
+    }
+    point_reasons: dict[str, int] = {}
+
+    for episode in range(episodes):
+        obs, _ = env.reset(seed=seed + episode)
+        done = False
+        episode_reward = 0.0
+        info: dict[str, Any] = {}
+        terminated = False
+        truncated = False
+        while not done:
+            action, _ = blue_model.predict(obs, deterministic=True)
+            obs, reward, terminated, truncated, info = env.step(action)
+            episode_reward += float(reward)
+            done = terminated or truncated
+
+        totals["terminated"] += int(terminated)
+        totals["truncated"] += int(truncated)
+        totals["red_scores"] += int(info["agent_miss"])
+        totals["blue_scores"] += int(info["agent_score"])
+        totals["blue_hits"] += int(info["agent_hits"])
+        totals["red_hits"] += int(info["opponent_hits"])
+        totals["hit_episodes"] += int(info["opponent_hits"] > 0)
+        totals["rally"] += int(info["rally_length"])
+        totals["reward"] += episode_reward
+        totals["steps"] += int(info["steps"])
+        totals["opponent_loaded"] += int(info["opponent_model_loaded"])
+        reason = str(info.get("point_reason", "unknown"))
+        point_reasons[reason] = point_reasons.get(reason, 0) + 1
+
+    env.close()
+    red_win_rate = totals["red_scores"] / episodes
+    blue_win_rate = totals["blue_scores"] / episodes
+    return {
+        "stage": 13,
+        "episodes": episodes,
+        "red_model_path": str(red_model_path),
+        "blue_model_path": str(blue_model_path),
+        "normal_end_rate": totals["terminated"] / episodes,
+        "truncated_rate": totals["truncated"] / episodes,
+        "red_win_rate": red_win_rate,
+        "blue_win_rate": blue_win_rate,
+        "red_hit_rate": totals["hit_episodes"] / episodes,
+        "avg_red_hits": totals["red_hits"] / episodes,
+        "avg_blue_hits": totals["blue_hits"] / episodes,
+        "avg_rally_length": totals["rally"] / episodes,
+        "opponent_loaded_rate": totals["opponent_loaded"] / episodes,
+        "estimated_red_elo_delta": _elo_delta_from_win_rate(red_win_rate),
+        "point_reasons": point_reasons,
+        "avg_blue_reward": totals["reward"] / episodes,
+        "avg_steps": totals["steps"] / episodes,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate Stage 13 league self-play against an opponent pool.")
     parser.add_argument("--model-path", type=Path, default=ROOT / "models" / "passed" / "ppo_stage13")
     parser.add_argument("--opponent-model-paths", type=Path, nargs="*", default=None)
+    parser.add_argument("--red-challenge-model-path", type=Path, default=None)
     parser.add_argument("--episodes", type=int, default=100)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--json-path", type=Path, default=None)
     args = parser.parse_args()
 
-    opponent_paths = args.opponent_model_paths if args.opponent_model_paths is not None else default_opponent_paths()
-    metrics = evaluate_league_model(args.model_path, opponent_paths, args.episodes, seed=args.seed)
+    if args.red_challenge_model_path is not None:
+        metrics = evaluate_red_challenge(args.red_challenge_model_path, args.model_path, args.episodes, seed=args.seed)
+    else:
+        opponent_paths = args.opponent_model_paths if args.opponent_model_paths is not None else default_opponent_paths()
+        metrics = evaluate_league_model(args.model_path, opponent_paths, args.episodes, seed=args.seed)
     write_metrics(metrics, args.json_path)
     print_metrics(metrics)
 

@@ -12,9 +12,9 @@ from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback,
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-from pingpong_rl.envs.league_self_play_env import LeagueSelfPlayConfig, LeagueSelfPlayEnv
+from pingpong_rl.envs.league_self_play_env import LeagueSelfPlayConfig, LeagueSelfPlayEnv, RedLeagueSelfPlayEnv
 from train.eval_utils import ROOT, write_metrics
-from train.evaluate_league_stage13 import default_opponent_paths, evaluate_league_model
+from train.evaluate_league_stage13 import default_opponent_paths, evaluate_league_model, evaluate_red_challenge
 from train.train_league_stage13 import make_env
 
 
@@ -59,13 +59,31 @@ def _score(metrics: dict[str, Any]) -> float:
 def _should_promote(
     candidate: dict[str, Any],
     champion: dict[str, Any],
+    red_challenge: dict[str, Any] | None,
     min_score_improvement: float,
     min_pool_win_rate: float,
     min_worst_win_rate: float,
     min_rally_length: float,
+    min_red_challenge_win_rate: float,
 ) -> tuple[bool, str]:
     candidate_score = _score(candidate)
     champion_score = _score(champion)
+    if red_challenge is not None:
+        red_win_rate = float(red_challenge["red_win_rate"])
+        red_normal_end_rate = float(red_challenge["normal_end_rate"])
+        red_rally_length = float(red_challenge["avg_rally_length"])
+        if (
+            red_win_rate >= min_red_challenge_win_rate
+            and red_normal_end_rate >= 0.95
+            and red_rally_length >= min_rally_length
+            and float(candidate["pool_win_rate"]) >= min_pool_win_rate
+        ):
+            return (
+                True,
+                "red challenger win_rate "
+                f"{red_win_rate:.3f} >= {min_red_challenge_win_rate:.3f} "
+                f"against current blue champion",
+            )
     if float(candidate["pool_win_rate"]) < min_pool_win_rate:
         return False, f"pool_win_rate {candidate['pool_win_rate']:.3f} < {min_pool_win_rate:.3f}"
     if float(candidate["worst_opponent_win_rate"]) < min_worst_win_rate:
@@ -77,6 +95,26 @@ def _should_promote(
     return True, f"score {candidate_score:.2f} >= champion score {champion_score:.2f} + {min_score_improvement:.2f}"
 
 
+def _should_promote_red_champion(
+    red_challenge: dict[str, Any],
+    min_red_challenge_win_rate: float,
+    min_rally_length: float,
+) -> tuple[bool, str]:
+    red_win_rate = float(red_challenge["red_win_rate"])
+    normal_end_rate = float(red_challenge["normal_end_rate"])
+    avg_rally_length = float(red_challenge["avg_rally_length"])
+    if red_win_rate < min_red_challenge_win_rate:
+        return False, f"red_win_rate {red_win_rate:.3f} < {min_red_challenge_win_rate:.3f}"
+    if normal_end_rate < 0.85:
+        return False, f"red normal_end_rate {normal_end_rate:.3f} < 0.850"
+    if avg_rally_length < min_rally_length:
+        return False, f"red avg_rally_length {avg_rally_length:.2f} < {min_rally_length:.2f}"
+    return True, (
+        f"red challenger win_rate {red_win_rate:.3f} >= {min_red_challenge_win_rate:.3f}, "
+        f"normal_end_rate {normal_end_rate:.3f}, avg_rally_length {avg_rally_length:.2f}"
+    )
+
+
 def _train_candidate(
     base_model_path: Path,
     opponent_paths: list[Path],
@@ -86,20 +124,32 @@ def _train_candidate(
     num_envs: int,
     seed: int,
     eval_episodes: int,
+    train_side: str,
 ) -> Path:
-    vec_env = DummyVecEnv([make_env(opponent_paths) for _ in range(num_envs)])
+    if train_side == "red":
+        def make_red_env():
+            config = LeagueSelfPlayConfig(opponent_model_paths=tuple(str(path) for path in opponent_paths))
+            return Monitor(RedLeagueSelfPlayEnv(render_mode=None, config=config))
+
+        env_fns = [make_red_env for _ in range(num_envs)]
+        eval_config = LeagueSelfPlayConfig(opponent_model_paths=tuple(str(path) for path in opponent_paths))
+        eval_env = Monitor(RedLeagueSelfPlayEnv(config=eval_config))
+    else:
+        env_fns = [make_env(opponent_paths) for _ in range(num_envs)]
+        eval_config = LeagueSelfPlayConfig(opponent_model_paths=tuple(str(path) for path in opponent_paths))
+        eval_env = Monitor(LeagueSelfPlayEnv(config=eval_config))
+
+    vec_env = DummyVecEnv(env_fns)
     vec_env.seed(seed)
-    eval_config = LeagueSelfPlayConfig(opponent_model_paths=tuple(str(path) for path in opponent_paths))
-    eval_env = Monitor(LeagueSelfPlayEnv(config=eval_config))
     checkpoint_callback = CheckpointCallback(
         save_freq=max(timesteps // 4 // num_envs, 1),
         save_path=str(ROOT / "models" / "checkpoints"),
-        name_prefix=f"ppo_evolve_stage13_gen{generation}",
+        name_prefix=f"ppo_evolve_stage13_{train_side}_gen{generation}",
     )
     eval_callback = EvalCallback(
         eval_env,
-        best_model_save_path=str(ROOT / "models" / "best" / f"stage13_gen{generation}"),
-        log_path=str(ROOT / "logs" / "ppo_league_stage13" / f"evolve_gen{generation}"),
+        best_model_save_path=str(ROOT / "models" / "best" / f"stage13_{train_side}_gen{generation}"),
+        log_path=str(ROOT / "logs" / "ppo_league_stage13" / f"evolve_{train_side}_gen{generation}"),
         eval_freq=max(timesteps // 8 // num_envs, 1),
         n_eval_episodes=min(eval_episodes, 50),
         deterministic=True,
@@ -107,7 +157,7 @@ def _train_candidate(
     )
     model = PPO.load(base_model_path, env=vec_env)
     model.verbose = 1
-    best_model_path = ROOT / "models" / "best" / f"stage13_gen{generation}" / "best_model"
+    best_model_path = ROOT / "models" / "best" / f"stage13_{train_side}_gen{generation}" / "best_model"
     model.learn(total_timesteps=timesteps, callback=CallbackList([checkpoint_callback, eval_callback]))
     candidate_path.parent.mkdir(parents=True, exist_ok=True)
     model.save(candidate_path)
@@ -124,11 +174,14 @@ def main() -> None:
     parser.add_argument("--num-envs", type=int, default=4)
     parser.add_argument("--seed", type=int, default=5001)
     parser.add_argument("--champion-path", type=Path, default=ROOT / "models" / "passed" / "ppo_stage13")
+    parser.add_argument("--red-champion-path", type=Path, default=ROOT / "models" / "passed" / "ppo_stage13_red")
     parser.add_argument("--eval-episodes", type=int, default=100)
     parser.add_argument("--min-score-improvement", type=float, default=0.50)
     parser.add_argument("--min-pool-win-rate", type=float, default=0.49)
     parser.add_argument("--min-worst-win-rate", type=float, default=0.45)
     parser.add_argument("--min-rally-length", type=float, default=3.8)
+    parser.add_argument("--min-red-challenge-win-rate", type=float, default=0.54)
+    parser.add_argument("--train-side", choices=("blue", "red", "alternate"), default="blue")
     parser.add_argument("--history-path", type=Path, default=ROOT / "logs" / "ppo_league_stage13" / "evolution_history.json")
     args = parser.parse_args()
 
@@ -142,6 +195,10 @@ def main() -> None:
     champion_path = args.champion_path
     for offset in range(args.generations):
         generation = args.start_generation + offset
+        if args.train_side == "alternate":
+            train_side = "red" if generation % 2 == 0 else "blue"
+        else:
+            train_side = args.train_side
         opponent_paths = league_pool(champion_path)
         champion_metrics = evaluate_league_model(champion_path, opponent_paths, args.eval_episodes, seed=args.seed + offset * 1000)
         champion_json = ROOT / "logs" / "ppo_league_stage13" / f"champion_before_gen{generation}.json"
@@ -157,6 +214,7 @@ def main() -> None:
             args.num_envs,
             args.seed + generation,
             args.eval_episodes,
+            train_side,
         )
         candidate_metrics = evaluate_league_model(candidate_path, opponent_paths, args.eval_episodes, seed=args.seed + offset * 1000)
         candidate_json = ROOT / "logs" / "ppo_league_stage13" / f"gen{generation}_evolve_eval.json"
@@ -175,29 +233,52 @@ def main() -> None:
                 shutil.copy2(_zip_path(best_candidate_path), _zip_path(candidate_path))
                 candidate_metrics = best_candidate_metrics
 
+        red_challenge_metrics = evaluate_red_challenge(
+            candidate_path,
+            champion_path,
+            args.eval_episodes,
+            seed=args.seed + offset * 1000 + 500_000,
+        )
+        red_challenge_json = ROOT / "logs" / "ppo_league_stage13" / f"gen{generation}_red_challenge_eval.json"
+        write_metrics(red_challenge_metrics, red_challenge_json)
+
         promoted, reason = _should_promote(
             candidate_metrics,
             champion_metrics,
+            red_challenge_metrics,
             args.min_score_improvement,
             args.min_pool_win_rate,
             args.min_worst_win_rate,
             args.min_rally_length,
+            args.min_red_challenge_win_rate,
         )
         if promoted:
             shutil.copy2(_zip_path(candidate_path), _zip_path(args.champion_path))
             champion_path = args.champion_path
+        red_promoted, red_reason = _should_promote_red_champion(
+            red_challenge_metrics,
+            args.min_red_challenge_win_rate,
+            args.min_rally_length,
+        )
+        if red_promoted:
+            args.red_champion_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(_zip_path(candidate_path), _zip_path(args.red_champion_path))
 
         record = {
             "generation": generation,
+            "train_side": train_side,
             "candidate_path": str(_zip_path(candidate_path)),
             "best_checkpoint_path": str(_zip_path(best_candidate_path)),
             "opponent_pool": [str(path) for path in opponent_paths],
             "promoted": promoted,
             "reason": reason,
+            "red_promoted": red_promoted,
+            "red_reason": red_reason,
             "champion_score": _score(champion_metrics),
             "candidate_score": _score(candidate_metrics),
             "champion_metrics": champion_metrics,
             "candidate_metrics": candidate_metrics,
+            "red_challenge_metrics": red_challenge_metrics,
             "final_candidate_metrics": None if best_candidate_metrics is None else json.loads(candidate_json.read_text()),
         }
         history.append(record)
