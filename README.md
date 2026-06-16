@@ -299,6 +299,16 @@ Continue the league with the next generation:
 python -m train.train_league_stage13 --generation 3 --base-model-path models/passed/ppo_stage13 --timesteps 200000
 ```
 
+Run the promotion-based evolution loop:
+
+```bash
+python -m train.evolve_league_stage13 --start-generation 3 --generations 1 --timesteps-per-generation 200000
+```
+
+The evolution loop evaluates the current champion, trains a candidate against a
+pool that includes the champion, and promotes only candidates whose pool score,
+weakest-opponent win rate, and rally length beat the current champion.
+
 The trained Stage 13 model is available at:
 
 ```text
