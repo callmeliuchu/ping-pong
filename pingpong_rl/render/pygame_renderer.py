@@ -68,8 +68,25 @@ class PygameRenderer:
             3,
         )
         self._draw_trail(getattr(env, "ball_trail", []))
-        self._draw_ball(env.ball_x, env.ball_y, env.config.ball_radius)
         if hasattr(env, "agent_angle"):
+            self._draw_robot_arm(
+                "left",
+                env.agent_x,
+                env.agent_y,
+                env.agent_angle,
+                (90, 170, 255),
+                env.config.table_left,
+                env.config.table_y,
+            )
+            self._draw_robot_arm(
+                "right",
+                env.opponent_x,
+                env.opponent_y,
+                env.opponent_angle,
+                (255, 120, 120),
+                env.config.table_right,
+                env.config.table_y,
+            )
             self._draw_rotated_paddle(
                 env.agent_x,
                 env.agent_y,
@@ -101,6 +118,7 @@ class PygameRenderer:
                 env.config.paddle_height,
                 (255, 120, 120),
             )
+        self._draw_ball(env.ball_x, env.ball_y, env.config.ball_radius)
         if hasattr(env, "rally_length"):
             if hasattr(env, "style_match_landings"):
                 gravity_mode = f"variety {getattr(env, 'last_target_style', 'none')}"
@@ -191,6 +209,79 @@ class PygameRenderer:
             world_y = y - sin_a * local_x + cos_a * local_y
             corners.append((int(world_x), int(world_y)))
         pygame.draw.polygon(self.screen, color, corners)
+
+    def _draw_robot_arm(
+        self,
+        side: str,
+        paddle_x: float,
+        paddle_y: float,
+        paddle_angle: float,
+        color: tuple[int, int, int],
+        table_edge_x: float,
+        table_y: float,
+    ) -> None:
+        direction = 1 if side == "left" else -1
+        base_x = table_edge_x - direction * 62.0
+        base_y = table_y + 76.0
+        shoulder_x = base_x + direction * 18.0
+        shoulder_y = base_y - 46.0
+        wrist_x = paddle_x - direction * 18.0 * float(np.cos(paddle_angle))
+        wrist_y = paddle_y + 18.0 * float(np.sin(paddle_angle))
+        elbow_x, elbow_y = self._two_link_elbow(shoulder_x, shoulder_y, wrist_x, wrist_y, side)
+
+        base_color = (72, 82, 92)
+        joint_color = (222, 230, 238)
+        shadow_color = (10, 14, 18)
+        arm_color = tuple(int(0.62 * component + 0.38 * 190) for component in color)
+
+        pygame.draw.rect(
+            self.screen,
+            base_color,
+            pygame.Rect(base_x - 18, base_y - 8, 36, 18),
+            border_radius=4,
+        )
+        pygame.draw.line(self.screen, shadow_color, (shoulder_x, shoulder_y), (elbow_x, elbow_y), 14)
+        pygame.draw.line(self.screen, shadow_color, (elbow_x, elbow_y), (wrist_x, wrist_y), 12)
+        pygame.draw.line(self.screen, arm_color, (shoulder_x, shoulder_y), (elbow_x, elbow_y), 9)
+        pygame.draw.line(self.screen, arm_color, (elbow_x, elbow_y), (wrist_x, wrist_y), 8)
+        pygame.draw.line(
+            self.screen,
+            joint_color,
+            (wrist_x, wrist_y),
+            (paddle_x, paddle_y),
+            5,
+        )
+        for joint_x, joint_y, radius in (
+            (shoulder_x, shoulder_y, 11),
+            (elbow_x, elbow_y, 10),
+            (wrist_x, wrist_y, 8),
+        ):
+            pygame.draw.circle(self.screen, shadow_color, (int(joint_x), int(joint_y)), radius + 3)
+            pygame.draw.circle(self.screen, joint_color, (int(joint_x), int(joint_y)), radius)
+            pygame.draw.circle(self.screen, arm_color, (int(joint_x), int(joint_y)), max(radius - 5, 3))
+
+    def _two_link_elbow(
+        self,
+        shoulder_x: float,
+        shoulder_y: float,
+        wrist_x: float,
+        wrist_y: float,
+        side: str,
+    ) -> tuple[int, int]:
+        upper = 134.0
+        forearm = 128.0
+        dx = wrist_x - shoulder_x
+        dy = wrist_y - shoulder_y
+        distance = float(np.hypot(dx, dy))
+        distance = max(1.0, min(distance, upper + forearm - 1.0))
+        base_angle = float(np.arctan2(dy, dx))
+        cos_offset = (upper * upper + distance * distance - forearm * forearm) / (2.0 * upper * distance)
+        offset = float(np.arccos(np.clip(cos_offset, -1.0, 1.0)))
+        bend = 1.0 if side == "left" else -1.0
+        elbow_angle = base_angle + bend * offset
+        elbow_x = shoulder_x + upper * float(np.cos(elbow_angle))
+        elbow_y = shoulder_y + upper * float(np.sin(elbow_angle))
+        return int(elbow_x), int(elbow_y)
 
     def _finish(self, env, mode: str):
         if mode == "rgb_array":
