@@ -552,12 +552,41 @@ models/selfplay/stage20/gen_1.zip
 models/best/stage20/best_model.zip
 ```
 
-## Validate All Stages
+## Stage 21: Grand Champion Finish League
 
-Run the full twenty-stage gate check:
+Stage 21 extends Stage 20 by explicitly adding the passed Stage 20 champion to
+the fixed league pool. The new gate tracks `champion_win_rate`,
+`champion_forced_finish_rate`, and `champion_stalemate_rate` so improvement is
+measured against the current champion, not only against older league snapshots.
+
+Train, evaluate, and watch Stage 21:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100 --stage18-episodes 30 --stage19-episodes 30 --stage20-episodes 30
+python -m train.train_robot_arm_grand_champion_attack --generation 1 --base-model-path models/passed/ppo_stage20 --timesteps 120000
+python -m train.evaluate_robot_arm_grand_champion_attack --model-path models/passed/ppo_stage21 --episodes 30
+python -m play.watch_stage21 --model-path models/passed/ppo_stage21 --seed 0
+```
+
+Export a Pygame-rendered grand champion attack GIF:
+
+```bash
+SDL_VIDEODRIVER=dummy python -m play.watch_stage21 --model-path models/passed/ppo_stage21 --seed 0 --gif-path logs/ppo_robot_arm_grand_champion_attack_stage21/stage21_robot_arm_grand_champion_attack.gif --max-steps 1600
+```
+
+The current Stage 21 model is available at:
+
+```text
+models/passed/ppo_stage21.zip
+models/selfplay/stage21/gen_1.zip
+models/best/stage21/best_model.zip
+```
+
+## Validate All Stages
+
+Run the full twenty-one-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100 --stage18-episodes 30 --stage19-episodes 30 --stage20-episodes 30 --stage21-episodes 30
 ```
 
 Passing models are copied to:
@@ -583,6 +612,7 @@ models/passed/ppo_stage17.zip
 models/passed/ppo_stage18.zip
 models/passed/ppo_stage19.zip
 models/passed/ppo_stage20.zip
+models/passed/ppo_stage21.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.
