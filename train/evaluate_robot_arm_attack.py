@@ -7,15 +7,15 @@ from typing import Any
 
 from stable_baselines3 import PPO
 
-from pingpong_rl.envs.robot_arm_tactical_league_env import RobotArmTacticalLeagueConfig, RobotArmTacticalLeagueEnv
+from pingpong_rl.envs.robot_arm_attack_league_env import RobotArmAttackLeagueConfig, RobotArmAttackLeagueEnv
 from train.eval_utils import ROOT, print_metrics, write_metrics
-from train.evaluate_robot_arm_league import default_robot_arm_opponent_paths
+from train.evaluate_robot_arm_tactical import default_tactical_opponent_paths
 
 
 def _label(path: Path) -> str:
     if path.parent.name == "passed":
         return path.stem
-    if path.parent.name in {"stage15", "stage16"}:
+    if path.parent.name in {"stage15", "stage16", "stage17"}:
         return f"{path.parent.name}_{path.stem}"
     return path.with_suffix("").name
 
@@ -25,9 +25,9 @@ def _elo_delta_from_win_rate(win_rate: float) -> float:
     return -400.0 * math.log10((1.0 / win_rate) - 1.0)
 
 
-def default_tactical_opponent_paths() -> list[Path]:
-    candidates = default_robot_arm_opponent_paths()
-    candidates.extend(sorted((ROOT / "models" / "selfplay" / "stage16").glob("gen_*.zip")))
+def default_attack_opponent_paths() -> list[Path]:
+    candidates = default_tactical_opponent_paths()
+    candidates.extend(sorted((ROOT / "models" / "selfplay" / "stage17").glob("gen_*.zip")))
     paths: list[Path] = []
     seen: set[Path] = set()
     for candidate in candidates:
@@ -43,8 +43,8 @@ def default_tactical_opponent_paths() -> list[Path]:
 
 
 def _evaluate_one(model: PPO, opponent_model_path: Path, episodes: int, seed: int) -> dict[str, Any]:
-    config = RobotArmTacticalLeagueConfig(opponent_model_paths=(str(opponent_model_path),))
-    env = RobotArmTacticalLeagueEnv(config=config)
+    config = RobotArmAttackLeagueConfig(opponent_model_paths=(str(opponent_model_path),))
+    env = RobotArmAttackLeagueEnv(config=config)
     totals = {
         "terminated": 0,
         "truncated": 0,
@@ -63,9 +63,13 @@ def _evaluate_one(model: PPO, opponent_model_path: Path, episodes: int, seed: in
         "max_topspin": 0.0,
         "tracking_error": 0.0,
         "opponent_loaded": 0,
-        "red_drive_episodes": 0,
         "clean_scores": 0,
         "wrong_side_scores": 0,
+        "attack_episodes": 0,
+        "high_pressure_episodes": 0,
+        "clean_attack_scores": 0,
+        "forced_error_scores": 0,
+        "max_attack_pressure": 0.0,
     }
     point_reasons: dict[str, int] = {}
 
@@ -103,9 +107,13 @@ def _evaluate_one(model: PPO, opponent_model_path: Path, episodes: int, seed: in
         totals["max_topspin"] += float(info.get("max_topspin", 0.0))
         totals["tracking_error"] += tracking_total / max(tracking_samples, 1)
         totals["opponent_loaded"] += int(info.get("opponent_model_loaded", False))
-        totals["red_drive_episodes"] += int(info.get("red_drive_attempts", 0) > 0)
         totals["clean_scores"] += int(info.get("clean_agent_scores", 0))
         totals["wrong_side_scores"] += int(info.get("wrong_side_agent_scores", 0))
+        totals["attack_episodes"] += int(info.get("attack_landings", 0) > 0)
+        totals["high_pressure_episodes"] += int(info.get("high_pressure_landings", 0) > 0)
+        totals["clean_attack_scores"] += int(info.get("clean_attack_scores", 0))
+        totals["forced_error_scores"] += int(info.get("forced_error_scores", 0))
+        totals["max_attack_pressure"] += float(info.get("max_attack_pressure", 0.0))
         reason = str(info.get("point_reason", "unknown"))
         point_reasons[reason] = point_reasons.get(reason, 0) + 1
 
@@ -128,9 +136,13 @@ def _evaluate_one(model: PPO, opponent_model_path: Path, episodes: int, seed: in
         "avg_max_topspin": totals["max_topspin"] / episodes,
         "avg_tracking_error": totals["tracking_error"] / episodes,
         "opponent_loaded_rate": totals["opponent_loaded"] / episodes,
-        "red_drive_attempt_rate": totals["red_drive_episodes"] / episodes,
         "clean_score_rate": totals["clean_scores"] / episodes,
         "wrong_side_score_rate": totals["wrong_side_scores"] / episodes,
+        "attack_landing_rate": totals["attack_episodes"] / episodes,
+        "high_pressure_rate": totals["high_pressure_episodes"] / episodes,
+        "clean_attack_score_rate": totals["clean_attack_scores"] / episodes,
+        "forced_error_score_rate": totals["forced_error_scores"] / episodes,
+        "avg_max_attack_pressure": totals["max_attack_pressure"] / episodes,
         "estimated_elo_delta": _elo_delta_from_win_rate(win_rate),
         "point_reasons": point_reasons,
         "avg_reward": totals["reward"] / episodes,
@@ -138,7 +150,7 @@ def _evaluate_one(model: PPO, opponent_model_path: Path, episodes: int, seed: in
     }
 
 
-def evaluate_robot_arm_tactical_model(
+def evaluate_robot_arm_attack_model(
     model_path: Path,
     opponent_model_paths: list[Path],
     episodes: int,
@@ -149,7 +161,7 @@ def evaluate_robot_arm_tactical_model(
     for index, opponent_path in enumerate(opponent_model_paths):
         per_opponent[_label(opponent_path)] = _evaluate_one(model, opponent_path, episodes, seed + index * 10_000)
     if not per_opponent:
-        raise ValueError("Stage 16 tactical evaluation needs at least one robot-arm opponent model.")
+        raise ValueError("Stage 17 attack evaluation needs at least one robot-arm opponent model.")
 
     def avg(key: str) -> float:
         return sum(float(metrics[key]) for metrics in per_opponent.values()) / len(per_opponent)
@@ -157,7 +169,7 @@ def evaluate_robot_arm_tactical_model(
     win_rates = {name: float(metrics["win_rate"]) for name, metrics in per_opponent.items()}
     elo_delta = sum(float(metrics["estimated_elo_delta"]) for metrics in per_opponent.values()) / len(per_opponent)
     return {
-        "stage": 16,
+        "stage": 17,
         "episodes_per_opponent": episodes,
         "opponent_pool_size": len(per_opponent),
         "pool_win_rate": avg("win_rate"),
@@ -176,9 +188,13 @@ def evaluate_robot_arm_tactical_model(
         "avg_max_topspin": avg("avg_max_topspin"),
         "avg_tracking_error": avg("avg_tracking_error"),
         "opponent_loaded_rate": avg("opponent_loaded_rate"),
-        "red_drive_attempt_rate": avg("red_drive_attempt_rate"),
         "clean_score_rate": avg("clean_score_rate"),
         "wrong_side_score_rate": avg("wrong_side_score_rate"),
+        "attack_landing_rate": avg("attack_landing_rate"),
+        "high_pressure_rate": avg("high_pressure_rate"),
+        "clean_attack_score_rate": avg("clean_attack_score_rate"),
+        "forced_error_score_rate": avg("forced_error_score_rate"),
+        "avg_max_attack_pressure": avg("avg_max_attack_pressure"),
         "estimated_elo": 1000.0 + elo_delta,
         "estimated_elo_delta_vs_pool": elo_delta,
         "win_rate_matrix": {"candidate": win_rates},
@@ -190,16 +206,16 @@ def evaluate_robot_arm_tactical_model(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate Stage 16 tactical robot-arm league.")
-    parser.add_argument("--model-path", type=Path, default=ROOT / "models" / "passed" / "ppo_stage16")
+    parser = argparse.ArgumentParser(description="Evaluate Stage 17 attack robot-arm league.")
+    parser.add_argument("--model-path", type=Path, default=ROOT / "models" / "passed" / "ppo_stage17")
     parser.add_argument("--opponent-model-paths", type=Path, nargs="*", default=None)
     parser.add_argument("--episodes", type=int, default=100)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--json-path", type=Path, default=None)
     args = parser.parse_args()
 
-    opponent_paths = args.opponent_model_paths if args.opponent_model_paths is not None else default_tactical_opponent_paths()
-    metrics = evaluate_robot_arm_tactical_model(args.model_path, opponent_paths, args.episodes, seed=args.seed)
+    opponent_paths = args.opponent_model_paths if args.opponent_model_paths is not None else default_attack_opponent_paths()
+    metrics = evaluate_robot_arm_attack_model(args.model_path, opponent_paths, args.episodes, seed=args.seed)
     write_metrics(metrics, args.json_path)
     print_metrics(metrics)
 

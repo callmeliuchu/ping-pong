@@ -430,12 +430,42 @@ models/selfplay/stage16/gen_1.zip
 models/best/stage16/best_model.zip
 ```
 
-## Validate All Stages
+## Stage 17: Attacking Robot-Arm League
 
-Run the full sixteen-stage gate check:
+Stage 17 starts from the clean Stage 16 policy and adds an attacking objective.
+Loop, drive, topspin, deep placement, wide placement, and visible arc now form a
+pressure score. High-pressure blue shots make red's model-controlled arm harder
+to align in time, so blue can win through clean attack pressure instead of
+wrong-side landing gifts.
+
+Train, evaluate, and watch Stage 17:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100
+python -m train.train_robot_arm_attack --generation 1 --base-model-path models/passed/ppo_stage16 --timesteps 160000
+python -m train.evaluate_robot_arm_attack --model-path models/passed/ppo_stage17 --episodes 100
+python -m play.watch_stage17 --model-path models/passed/ppo_stage17 --seed 0
+```
+
+Export a Pygame-rendered attack GIF:
+
+```bash
+SDL_VIDEODRIVER=dummy python -m play.watch_stage17 --model-path models/passed/ppo_stage17 --seed 0 --gif-path logs/ppo_robot_arm_attack_stage17/stage17_robot_arm_attack.gif --max-steps 1600
+```
+
+The current Stage 17 model is available at:
+
+```text
+models/passed/ppo_stage17.zip
+models/selfplay/stage17/gen_1.zip
+models/best/stage17/best_model.zip
+```
+
+## Validate All Stages
+
+Run the full seventeen-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100
 ```
 
 Passing models are copied to:
@@ -457,6 +487,7 @@ models/passed/ppo_stage13.zip
 models/passed/ppo_stage14.zip
 models/passed/ppo_stage15.zip
 models/passed/ppo_stage16.zip
+models/passed/ppo_stage17.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.
