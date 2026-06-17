@@ -398,12 +398,44 @@ models/selfplay/stage15/gen_2.zip
 models/best/stage15/best_model.zip
 ```
 
-## Validate All Stages
+## Stage 16: Clean Tactical Robot-Arm League
 
-Run the full fifteen-stage gate check:
+Stage 16 keeps the Stage 15 robot-arm league but changes the objective from
+winning through red-side wrong-side landing faults to building cleaner tactical
+rallies. Red returns use a spin-aware landing calculation, so topspin no longer
+falls short as often, and blue receives a penalty when it wins through red
+wrong-side gifts. The result is a lower immediate win rate but a much cleaner
+training target: longer exchanges, stable loop/drive/topspin landings, and very
+few wrong-side score endings.
+
+Train, evaluate, and watch Stage 16:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100
+python -m train.train_robot_arm_tactical --generation 1 --base-model-path models/passed/ppo_stage15 --timesteps 120000
+python -m train.evaluate_robot_arm_tactical --model-path models/passed/ppo_stage16 --episodes 100
+python -m play.watch_stage16 --model-path models/passed/ppo_stage16 --seed 0
+```
+
+Export a Pygame-rendered tactical GIF:
+
+```bash
+SDL_VIDEODRIVER=dummy python -m play.watch_stage16 --model-path models/passed/ppo_stage16 --seed 0 --gif-path logs/ppo_robot_arm_tactical_stage16/stage16_robot_arm_tactical.gif --max-steps 1600
+```
+
+The current Stage 16 model is available at:
+
+```text
+models/passed/ppo_stage16.zip
+models/selfplay/stage16/gen_1.zip
+models/best/stage16/best_model.zip
+```
+
+## Validate All Stages
+
+Run the full sixteen-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100
 ```
 
 Passing models are copied to:
@@ -424,6 +456,7 @@ models/passed/ppo_stage12.zip
 models/passed/ppo_stage13.zip
 models/passed/ppo_stage14.zip
 models/passed/ppo_stage15.zip
+models/passed/ppo_stage16.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.
