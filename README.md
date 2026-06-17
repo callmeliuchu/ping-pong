@@ -331,18 +331,33 @@ and paddle angle all come from forward kinematics. The right-side opponent also
 uses a fixed robot arm, driven by a scripted IK controller for this first
 prototype.
 
+The current Stage 14 policy also trains a more technical contact model. A
+closed, acute racket face plus upward wrist/arm brush creates topspin; positive
+topspin adds downward acceleration, so the ball can pull into a visible loop
+arc. Forward arm motion is counted as a drive even when it is also a topspin
+loop, and backspin/chop remains available through open-face downward brushing.
+The passed model is tuned for sustained topspin/drive rallies rather than only
+soft blocking.
+
 Train, evaluate, and watch the Stage 14 policy:
 
 ```bash
-python -m train.train_robot_arm --timesteps 500000
-python -m train.evaluate_robot_arm --model-path models/ppo_robot_arm_stage14 --episodes 100
-python -m play.watch_stage14 --model-path models/ppo_robot_arm_stage14
+python -m train.train_robot_arm --load-model-path models/passed/ppo_stage14 --timesteps 400000 --model-path models/ppo_robot_arm_stage14_spin_v2
+python -m train.evaluate_robot_arm --model-path models/passed/ppo_stage14 --episodes 100
+python -m play.watch_stage14 --model-path models/passed/ppo_stage14 --seed 42
 ```
 
-The initial Stage 14 model trained for 200k steps is available at:
+Export a Pygame-rendered GIF:
+
+```bash
+SDL_VIDEODRIVER=dummy python -m play.watch_stage14 --model-path models/passed/ppo_stage14 --seed 42 --gif-path logs/ppo_robot_arm_stage14/stage14_robot_arm_spin.gif --max-steps 900
+```
+
+The current Stage 14 model is available at:
 
 ```text
-models/ppo_robot_arm_stage14.zip
+models/passed/ppo_stage14.zip
+models/ppo_robot_arm_stage14_spin_v2.zip
 models/best/stage14/best_model.zip
 ```
 

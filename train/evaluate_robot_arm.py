@@ -32,6 +32,14 @@ def evaluate_robot_arm_model(
         "tracking_error": 0.0,
         "joint_speed": 0.0,
         "robot_enabled": 0,
+        "loop_episodes": 0,
+        "drive_episodes": 0,
+        "chop_episodes": 0,
+        "topspin_episodes": 0,
+        "backspin_episodes": 0,
+        "max_topspin": 0.0,
+        "max_backspin": 0.0,
+        "peak_arc": 0.0,
     }
     point_reasons: dict[str, int] = {}
 
@@ -68,6 +76,14 @@ def evaluate_robot_arm_model(
         totals["tracking_error"] += tracking_total / max(tracking_samples, 1)
         totals["joint_speed"] += joint_speed_total / max(tracking_samples, 1)
         totals["robot_enabled"] += int(info.get("robot_arm_enabled", False))
+        totals["loop_episodes"] += int(info.get("loop_landings", 0) > 0)
+        totals["drive_episodes"] += int(info.get("drive_landings", 0) > 0)
+        totals["chop_episodes"] += int(info.get("chop_landings", 0) > 0)
+        totals["topspin_episodes"] += int(info.get("topspin_landings", 0) > 0)
+        totals["backspin_episodes"] += int(info.get("backspin_landings", 0) > 0)
+        totals["max_topspin"] += float(info.get("max_topspin", 0.0))
+        totals["max_backspin"] += float(info.get("max_backspin", 0.0))
+        totals["peak_arc"] += float(info.get("agent_shot_peak_arc", 0.0))
         reason = str(info.get("point_reason", "unknown"))
         point_reasons[reason] = point_reasons.get(reason, 0) + 1
 
@@ -87,6 +103,14 @@ def evaluate_robot_arm_model(
         "avg_legal_landings": totals["legal_landings"] / episodes,
         "avg_tracking_error": totals["tracking_error"] / episodes,
         "avg_joint_speed": totals["joint_speed"] / episodes,
+        "loop_landing_rate": totals["loop_episodes"] / episodes,
+        "drive_landing_rate": totals["drive_episodes"] / episodes,
+        "chop_landing_rate": totals["chop_episodes"] / episodes,
+        "topspin_landing_rate": totals["topspin_episodes"] / episodes,
+        "backspin_landing_rate": totals["backspin_episodes"] / episodes,
+        "avg_max_topspin": totals["max_topspin"] / episodes,
+        "avg_max_backspin": totals["max_backspin"] / episodes,
+        "avg_peak_arc": totals["peak_arc"] / episodes,
         "point_reasons": point_reasons,
         "avg_reward": totals["reward"] / episodes,
         "avg_steps": totals["steps"] / episodes,

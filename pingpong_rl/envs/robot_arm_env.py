@@ -14,6 +14,10 @@ class RobotArmPingPongConfig(RealisticPingPongConfig):
 
     max_steps: int = 3600
     target_rally_length: int = 14
+    max_spin: float = 16.0
+    spin_lift: float = 0.016
+    spin_bounce_coupling: float = 0.070
+    max_ball_speed: float = 17.0
     agent_x_min: float = 45.0
     agent_x_max: float = 330.0
     opponent_x_min: float = 570.0
@@ -32,6 +36,11 @@ class RobotArmPingPongConfig(RealisticPingPongConfig):
     wrist_max: float = 0.95
     opponent_arm_speed_scale: float = 1.45
     end_effector_reward: float = 0.018
+    technique_reward: float = 0.30
+    topspin_landing_reward: float = 0.64
+    backspin_landing_reward: float = 0.06
+    drive_landing_reward: float = 0.48
+    loop_arc_reward: float = 0.44
     joint_center_penalty: float = 0.002
     move_penalty: float = 0.004
 
@@ -56,6 +65,28 @@ class RobotArmPingPongEnv(RealisticPingPongEnv):
         self.opponent_wrist_y = 0.0
         self.agent_tracking_error = 0.0
         self.opponent_tracking_error = 0.0
+        self.ball_trail: list[tuple[float, float]] = []
+        self.last_stroke_type = "none"
+        self.loop_attempts = 0
+        self.loop_landings = 0
+        self.drive_attempts = 0
+        self.drive_landings = 0
+        self.chop_attempts = 0
+        self.chop_landings = 0
+        self.topspin_attempts = 0
+        self.topspin_landings = 0
+        self.backspin_attempts = 0
+        self.backspin_landings = 0
+        self.max_topspin = 0.0
+        self.max_backspin = 0.0
+        self.agent_shot_start_y = 0.0
+        self.agent_shot_min_y = 0.0
+        self.agent_shot_peak_arc = 0.0
+        self.last_agent_action = np.zeros(3, dtype=np.float32)
+        self.agent_last_drive_like = False
+        self.agent_last_topspin_like = False
+        self.agent_last_backspin_like = False
+        self.agent_last_shot_speed = 0.0
 
     def reset(self, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed, options=options)
@@ -69,6 +100,27 @@ class RobotArmPingPongEnv(RealisticPingPongEnv):
         self._sync_opponent_from_arm()
         self.agent_tracking_error = self._distance_to_agent_target()
         self.opponent_tracking_error = 0.0
+        self.ball_trail = [(self.ball_x, self.ball_y)]
+        self.last_stroke_type = "none"
+        self.loop_attempts = 0
+        self.loop_landings = 0
+        self.drive_attempts = 0
+        self.drive_landings = 0
+        self.chop_attempts = 0
+        self.chop_landings = 0
+        self.topspin_attempts = 0
+        self.topspin_landings = 0
+        self.backspin_attempts = 0
+        self.backspin_landings = 0
+        self.max_topspin = 0.0
+        self.max_backspin = 0.0
+        self.agent_shot_start_y = self.ball_y
+        self.agent_shot_min_y = self.ball_y
+        self.agent_shot_peak_arc = 0.0
+        self.agent_last_drive_like = False
+        self.agent_last_topspin_like = False
+        self.agent_last_backspin_like = False
+        self.agent_last_shot_speed = 0.0
         return self._get_obs(), self._get_info(False, False, False, False, False)
 
     def _apply_agent_action(self, action: np.ndarray) -> None:
@@ -77,6 +129,7 @@ class RobotArmPingPongEnv(RealisticPingPongEnv):
             dtype=np.float32,
         )
         clipped = np.clip(action, -1.0, 1.0).astype(np.float32)
+        self.last_agent_action = clipped
         self.agent_joint_velocities = clipped * speeds
         self.agent_joint_angles = self._clip_joint_angles(self.agent_joint_angles + self.agent_joint_velocities)
         self._sync_agent_from_arm()
@@ -101,6 +154,88 @@ class RobotArmPingPongEnv(RealisticPingPongEnv):
         self.opponent_joint_angles = self._clip_joint_angles(self.opponent_joint_angles + self.opponent_joint_velocities)
         self._sync_opponent_from_arm()
         self.opponent_tracking_error = float(np.hypot(target_x - self.opponent_x, target_y - self.opponent_y))
+
+    def _move_ball(self) -> None:
+        self.ball_vy += self.config.gravity + self.config.spin_lift * self.ball_spin
+        self.ball_x += self.ball_vx
+        self.ball_y += self.ball_vy
+        speed = float(np.hypot(self.ball_vx, self.ball_vy))
+        if speed > self.config.max_ball_speed:
+            scale = self.config.max_ball_speed / speed
+            self.ball_vx *= scale
+            self.ball_vy *= scale
+        self.ball_trail.append((self.ball_x, self.ball_y))
+        if len(self.ball_trail) > 90:
+            self.ball_trail = self.ball_trail[-90:]
+        if self.last_hitter == "agent" and not self.shot_landed:
+            self.agent_shot_min_y = min(self.agent_shot_min_y, self.ball_y)
+            self.agent_shot_peak_arc = max(self.agent_shot_peak_arc, self.agent_shot_start_y - self.agent_shot_min_y)
+
+    def _bounce_from_paddle(self, player: str) -> None:
+        super()._bounce_from_paddle(player)
+        if player != "agent":
+            landing_x = float(
+                np.clip(
+                    self.config.table_left + 185.0 + 0.18 * (self.agent_x - self.config.agent_x_min),
+                    self.config.table_left + 85.0,
+                    self.config.net_x - 78.0,
+                )
+            )
+            self.ball_vy = self._aimed_vertical_velocity(landing_x, self.config.table_y - self.config.ball_radius)
+            self.ball_vy -= 0.30 + max(0.0, abs(self.opponent_angle) - 0.15) * 0.25
+            self.ball_spin = float(np.clip(self.ball_spin * 0.72, -self.config.max_spin, self.config.max_spin))
+            return
+
+        wrist_brush = float(self.agent_joint_velocities[2] / max(self.config.arm_wrist_speed, 1e-6))
+        upward_brush = float(max(-self.agent_vy / max(self.config.paddle_y_speed, 1.0), 0.0))
+        downward_brush = float(max(self.agent_vy / max(self.config.paddle_y_speed, 1.0), 0.0))
+        closed_face = float(max(-self.agent_angle / max(self.config.max_paddle_angle, 1e-6), 0.0))
+        open_face = float(max(self.agent_angle / max(self.config.max_paddle_angle, 1e-6), 0.0))
+        forward_swing = float(max(self.agent_vx / max(self.config.paddle_x_speed, 1.0), 0.0))
+        center_contact = max(self.last_contact_quality, 0.0)
+
+        topspin_intent = max(0.0, 0.45 * max(wrist_brush, 0.0) + 0.33 * upward_brush + 0.22 * closed_face)
+        chop_intent = max(0.0, 0.48 * max(-wrist_brush, 0.0) + 0.34 * downward_brush + 0.18 * open_face)
+        drive_intent = max(0.0, 0.62 * forward_swing + 0.38 * center_contact)
+
+        if topspin_intent >= max(chop_intent, 0.18):
+            spin_delta = 2.1 + 4.6 * topspin_intent
+            self.ball_vx = min(self.ball_vx + 0.30 + 0.45 * forward_swing, self.config.max_ball_speed)
+            self.ball_vy -= 0.16 + 0.42 * upward_brush
+        elif drive_intent >= 0.58 and abs(self.ball_spin) < 4.8:
+            spin_delta = 0.8 + 1.4 * closed_face - 0.6 * open_face
+            self.ball_vx = min(self.ball_vx + 0.75 + 0.55 * forward_swing, self.config.max_ball_speed)
+            self.ball_vy += 0.18 * downward_brush
+        else:
+            spin_delta = -1.3 - 3.4 * chop_intent
+            self.ball_vx = max(self.ball_vx - 0.18 * chop_intent, self.config.ball_speed_x_min)
+            self.ball_vy -= 0.08 * open_face
+        self.ball_spin = float(np.clip(0.36 * self.ball_spin + spin_delta, -self.config.max_spin, self.config.max_spin))
+        self.max_topspin = max(self.max_topspin, self.ball_spin)
+        self.max_backspin = max(self.max_backspin, -self.ball_spin)
+        self.agent_last_shot_speed = float(np.hypot(self.ball_vx, self.ball_vy))
+        self.agent_last_drive_like = bool(abs(self.ball_vx) >= 7.3)
+        self.agent_last_topspin_like = bool(self.ball_spin >= 2.0)
+        self.agent_last_backspin_like = bool(self.ball_spin <= -1.5)
+        self.last_stroke_type = self._classify_stroke()
+        self.loop_attempts += int(self.last_stroke_type == "loop")
+        self.drive_attempts += int(self.agent_last_drive_like)
+        self.chop_attempts += int(self.last_stroke_type == "chop")
+        self.topspin_attempts += int(self.agent_last_topspin_like)
+        self.backspin_attempts += int(self.agent_last_backspin_like)
+        self.agent_shot_start_y = self.ball_y
+        self.agent_shot_min_y = self.ball_y
+        self.agent_shot_peak_arc = 0.0
+
+    def _classify_stroke(self) -> str:
+        speed = abs(self.ball_vx)
+        if self.ball_spin >= 3.0:
+            return "loop"
+        if speed >= 7.3:
+            return "drive"
+        if self.ball_spin <= -2.0:
+            return "chop"
+        return "block"
 
     def _sync_agent_from_arm(self) -> None:
         previous_x = self.agent_x
@@ -193,7 +328,57 @@ class RobotArmPingPongEnv(RealisticPingPongEnv):
         reward -= self.config.joint_center_penalty * float(np.mean(np.square(self.agent_joint_angles)))
         if agent_hit:
             reward += 0.10 * min(float(np.linalg.norm(self.agent_joint_velocities)) / self.config.arm_wrist_speed, 1.5)
+            if self.last_stroke_type in {"loop", "drive", "chop"} or self.agent_last_drive_like:
+                reward += self.config.technique_reward
+            reward += 0.060 * min(max(self.ball_spin, 0.0), self.config.max_spin)
+            reward += 0.006 * min(max(-self.ball_spin, 0.0), self.config.max_spin)
+            reward += 0.045 * min(max(self.ball_vx - 7.0, 0.0), 4.0)
+            if self.last_stroke_type == "chop" and self.rally_length < 4:
+                reward -= 0.10
+        if legal_landing and self.last_hitter == "agent":
+            if self.last_stroke_type == "loop":
+                reward += self.config.topspin_landing_reward
+                if self.agent_shot_peak_arc >= 28.0:
+                    reward += self.config.loop_arc_reward
+            if self.agent_last_drive_like:
+                reward += self.config.drive_landing_reward
+            if self.last_stroke_type == "chop":
+                reward += self.config.backspin_landing_reward
         return float(reward)
+
+    def predict_ball_y_at_x(self, target_x: float) -> float:
+        if abs(self.ball_vx) < 1e-6 or (target_x - self.ball_x) * self.ball_vx <= 0:
+            return self.ball_y
+        x = self.ball_x
+        y = self.ball_y
+        vx = self.ball_vx
+        vy = self.ball_vy
+        spin = self.ball_spin
+        previous_x = x
+        previous_y = y
+        for _ in range(700):
+            previous_x = x
+            previous_y = y
+            vy += self.config.gravity + self.config.spin_lift * spin
+            x += vx
+            y += vy
+            if (target_x - previous_x) * (target_x - x) <= 0:
+                span = x - previous_x
+                alpha = 0.0 if abs(span) < 1e-6 else (target_x - previous_x) / span
+                predicted_y = previous_y + alpha * (y - previous_y)
+                return float(np.clip(predicted_y, self.config.table_y - 205, self.config.table_y - self.config.paddle_height / 2))
+            over_table = self.config.table_left <= x <= self.config.table_right
+            above_table = y + self.config.ball_radius >= self.config.table_y and vy > 0
+            if over_table and above_table:
+                y = self.config.table_y - self.config.ball_radius
+                vy *= -self.config.bounce_damping
+                vx += spin * self.config.spin_bounce_coupling
+                vx *= 0.995
+                spin *= 0.72
+            net_top = self.config.table_y - self.config.net_height
+            if abs(x - self.config.net_x) <= self.config.ball_radius and y + self.config.ball_radius >= net_top:
+                break
+        return float(np.clip(y, self.config.table_y - 205, self.config.table_y - self.config.paddle_height / 2))
 
     def _get_obs(self) -> np.ndarray:
         target_y = self.predict_ball_y_at_x(self.agent_x) if self.ball_vx < 0 else self.config.table_y - 98.0
@@ -241,10 +426,34 @@ class RobotArmPingPongEnv(RealisticPingPongEnv):
         legal_landing: bool,
     ) -> dict:
         info = super()._get_info(agent_hit, agent_score, agent_miss, rally_success, legal_landing)
+        if legal_landing and self.last_hitter == "agent":
+            self.loop_landings += int(self.last_stroke_type == "loop")
+            self.drive_landings += int(self.agent_last_drive_like)
+            self.chop_landings += int(self.last_stroke_type == "chop")
+            self.topspin_landings += int(self.agent_last_topspin_like)
+            self.backspin_landings += int(self.agent_last_backspin_like)
         info.update(
             {
                 "stage": 14,
                 "robot_arm_enabled": True,
+                "last_stroke_type": self.last_stroke_type,
+                "loop_attempts": self.loop_attempts,
+                "loop_landings": self.loop_landings,
+                "drive_attempts": self.drive_attempts,
+                "drive_landings": self.drive_landings,
+                "chop_attempts": self.chop_attempts,
+                "chop_landings": self.chop_landings,
+                "topspin_attempts": self.topspin_attempts,
+                "topspin_landings": self.topspin_landings,
+                "backspin_attempts": self.backspin_attempts,
+                "backspin_landings": self.backspin_landings,
+                "max_topspin": self.max_topspin,
+                "max_backspin": self.max_backspin,
+                "agent_shot_peak_arc": self.agent_shot_peak_arc,
+                "agent_last_drive_like": self.agent_last_drive_like,
+                "agent_last_topspin_like": self.agent_last_topspin_like,
+                "agent_last_backspin_like": self.agent_last_backspin_like,
+                "agent_last_shot_speed": self.agent_last_shot_speed,
                 "agent_joint_angles": self.agent_joint_angles.tolist(),
                 "agent_joint_velocities": self.agent_joint_velocities.tolist(),
                 "agent_tracking_error": self.agent_tracking_error,

@@ -9,6 +9,6 @@ dependencies:
       - gymnasium
       - stable-baselines3
       - pygame
+      - pillow
       - numpy
       - tensorboard
-

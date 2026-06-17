@@ -144,12 +144,12 @@ class PygameRenderer:
                 gravity_mode = f"variety {getattr(env, 'last_target_style', 'none')}"
             elif hasattr(env, "compact_technique_hits"):
                 gravity_mode = f"compact {getattr(env, 'last_stroke_type', 'none')}"
+            elif getattr(env, "agent_joint_angles", None) is not None:
+                gravity_mode = f"robot_arm {getattr(env, 'last_stroke_type', 'none')}"
             elif hasattr(env, "loop_attempts"):
                 gravity_mode = f"advanced {getattr(env, 'last_stroke_type', 'none')}"
             elif hasattr(env, "attack_attempts"):
                 gravity_mode = "competitive"
-            elif getattr(env, "agent_joint_angles", None) is not None:
-                gravity_mode = "robot_arm"
             elif hasattr(env, "ball_spin"):
                 gravity_mode = "realistic"
             else:

@@ -230,11 +230,15 @@ def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
         return (
             metrics["robot_arm_enabled_rate"] >= 1.0
             and metrics["normal_end_rate"] >= 0.80
-            and metrics["hit_rate"] >= 0.70
-            and metrics["avg_rally_length"] >= 5.0
+            and metrics["hit_rate"] >= 0.90
+            and metrics["avg_rally_length"] >= 8.0
+            and metrics["loop_landing_rate"] >= 0.80
+            and metrics["drive_landing_rate"] >= 0.80
+            and metrics["topspin_landing_rate"] >= 0.80
+            and metrics["avg_max_topspin"] >= 3.0
             and metrics["avg_tracking_error"] <= 45.0
             and metrics["avg_reward"] > 0.0,
-            "robot_arm_enabled_rate >= 1.0, normal_end_rate >= 0.80, hit_rate >= 0.70, avg_rally_length >= 5, avg_tracking_error <= 45, avg_reward > 0",
+            "robot_arm_enabled_rate >= 1.0, normal_end_rate >= 0.80, hit_rate >= 0.90, avg_rally_length >= 8, loop_landing_rate >= 0.80, drive_landing_rate >= 0.80, topspin_landing_rate >= 0.80, avg_max_topspin >= 3, avg_tracking_error <= 45, avg_reward > 0",
         )
     raise ValueError(stage)
 
@@ -332,7 +336,9 @@ def _print_table(results: list[StageResult]) -> None:
         else:
             key_metrics = (
                 f"robot={metrics['robot_arm_enabled_rate']:.3f}, hit={metrics['hit_rate']:.3f}, "
-                f"rally={metrics['avg_rally_length']:.2f}, track={metrics['avg_tracking_error']:.1f}, "
+                f"rally={metrics['avg_rally_length']:.2f}, loop={metrics['loop_landing_rate']:.3f}, "
+                f"drive={metrics['drive_landing_rate']:.3f}, top={metrics['avg_max_topspin']:.2f}, "
+                f"track={metrics['avg_tracking_error']:.1f}, "
                 f"reward={metrics['avg_reward']:.3f}"
                 if result.stage == 14
                 else (
