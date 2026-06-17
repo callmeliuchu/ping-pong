@@ -321,12 +321,37 @@ models/passed/ppo_stage13.zip
 models/selfplay/stage13/gen_2.zip
 ```
 
-## Validate All Stages
+## Stage 14: Joint-Controlled Robot Arm
 
-Run the full thirteen-stage gate check:
+Stage 14 leaves the previous stages unchanged and introduces a new environment
+where the agent no longer commands paddle position directly. The action is the
+joint velocity of a fixed three-joint robot arm: shoulder, elbow, and wrist.
+The paddle is attached to the arm's wrist, so contact timing, paddle position,
+and paddle angle all come from forward kinematics. The right-side opponent also
+uses a fixed robot arm, driven by a scripted IK controller for this first
+prototype.
+
+Train, evaluate, and watch the Stage 14 policy:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100
+python -m train.train_robot_arm --timesteps 500000
+python -m train.evaluate_robot_arm --model-path models/ppo_robot_arm_stage14 --episodes 100
+python -m play.watch_stage14 --model-path models/ppo_robot_arm_stage14
+```
+
+The initial Stage 14 model trained for 200k steps is available at:
+
+```text
+models/ppo_robot_arm_stage14.zip
+models/best/stage14/best_model.zip
+```
+
+## Validate All Stages
+
+Run the full fourteen-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100
 ```
 
 Passing models are copied to:
@@ -345,6 +370,7 @@ models/passed/ppo_stage10.zip
 models/passed/ppo_stage11.zip
 models/passed/ppo_stage12.zip
 models/passed/ppo_stage13.zip
+models/passed/ppo_stage14.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.

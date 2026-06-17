@@ -69,24 +69,44 @@ class PygameRenderer:
         )
         self._draw_trail(getattr(env, "ball_trail", []))
         if hasattr(env, "agent_angle"):
-            self._draw_robot_arm(
-                "left",
-                env.agent_x,
-                env.agent_y,
-                env.agent_angle,
-                (90, 170, 255),
-                env.config.table_left,
-                env.config.table_y,
-            )
-            self._draw_robot_arm(
-                "right",
-                env.opponent_x,
-                env.opponent_y,
-                env.opponent_angle,
-                (255, 120, 120),
-                env.config.table_right,
-                env.config.table_y,
-            )
+            if hasattr(env, "agent_joint_angles"):
+                self._draw_articulated_robot_arm(
+                    "left",
+                    getattr(env, "agent_arm_base"),
+                    env.agent_joint_angles,
+                    env.config.arm_upper_length,
+                    env.config.arm_forearm_length,
+                    env.config.arm_hand_length,
+                    (90, 170, 255),
+                )
+                self._draw_articulated_robot_arm(
+                    "right",
+                    getattr(env, "opponent_arm_base"),
+                    env.opponent_joint_angles,
+                    env.config.arm_upper_length,
+                    env.config.arm_forearm_length,
+                    env.config.arm_hand_length,
+                    (255, 120, 120),
+                )
+            else:
+                self._draw_robot_arm(
+                    "left",
+                    env.agent_x,
+                    env.agent_y,
+                    env.agent_angle,
+                    (90, 170, 255),
+                    env.config.table_left,
+                    env.config.table_y,
+                )
+                self._draw_robot_arm(
+                    "right",
+                    env.opponent_x,
+                    env.opponent_y,
+                    env.opponent_angle,
+                    (255, 120, 120),
+                    env.config.table_right,
+                    env.config.table_y,
+                )
             self._draw_rotated_paddle(
                 env.agent_x,
                 env.agent_y,
@@ -128,6 +148,8 @@ class PygameRenderer:
                 gravity_mode = f"advanced {getattr(env, 'last_stroke_type', 'none')}"
             elif hasattr(env, "attack_attempts"):
                 gravity_mode = "competitive"
+            elif getattr(env, "agent_joint_angles", None) is not None:
+                gravity_mode = "robot_arm"
             elif hasattr(env, "ball_spin"):
                 gravity_mode = "realistic"
             else:
@@ -282,6 +304,55 @@ class PygameRenderer:
         elbow_x = shoulder_x + upper * float(np.cos(elbow_angle))
         elbow_y = shoulder_y + upper * float(np.sin(elbow_angle))
         return int(elbow_x), int(elbow_y)
+
+    def _draw_articulated_robot_arm(
+        self,
+        side: str,
+        base: tuple[float, float],
+        joint_angles: np.ndarray,
+        upper: float,
+        forearm: float,
+        hand: float,
+        color: tuple[int, int, int],
+    ) -> None:
+        direction = 1.0 if side == "left" else -1.0
+        base_x, base_y = base
+        shoulder_x = base_x + direction * 18.0
+        shoulder_y = base_y - 46.0
+        base_heading = 0.0 if side == "left" else float(np.pi)
+        theta0 = base_heading + float(joint_angles[0])
+        theta1 = theta0 + float(joint_angles[1])
+        paddle_angle = float(joint_angles[2])
+        elbow_x = shoulder_x + upper * float(np.cos(theta0))
+        elbow_y = shoulder_y + upper * float(np.sin(theta0))
+        wrist_x = elbow_x + forearm * float(np.cos(theta1))
+        wrist_y = elbow_y + forearm * float(np.sin(theta1))
+        paddle_x = wrist_x + direction * hand * float(np.cos(paddle_angle))
+        paddle_y = wrist_y - hand * float(np.sin(paddle_angle))
+
+        base_color = (72, 82, 92)
+        joint_color = (222, 230, 238)
+        shadow_color = (10, 14, 18)
+        arm_color = tuple(int(0.62 * component + 0.38 * 190) for component in color)
+        pygame.draw.rect(
+            self.screen,
+            base_color,
+            pygame.Rect(base_x - 18, base_y - 8, 36, 18),
+            border_radius=4,
+        )
+        pygame.draw.line(self.screen, shadow_color, (shoulder_x, shoulder_y), (elbow_x, elbow_y), 14)
+        pygame.draw.line(self.screen, shadow_color, (elbow_x, elbow_y), (wrist_x, wrist_y), 12)
+        pygame.draw.line(self.screen, arm_color, (shoulder_x, shoulder_y), (elbow_x, elbow_y), 9)
+        pygame.draw.line(self.screen, arm_color, (elbow_x, elbow_y), (wrist_x, wrist_y), 8)
+        pygame.draw.line(self.screen, joint_color, (wrist_x, wrist_y), (paddle_x, paddle_y), 5)
+        for joint_x, joint_y, radius in (
+            (shoulder_x, shoulder_y, 11),
+            (elbow_x, elbow_y, 10),
+            (wrist_x, wrist_y, 8),
+        ):
+            pygame.draw.circle(self.screen, shadow_color, (int(joint_x), int(joint_y)), radius + 3)
+            pygame.draw.circle(self.screen, joint_color, (int(joint_x), int(joint_y)), radius)
+            pygame.draw.circle(self.screen, arm_color, (int(joint_x), int(joint_y)), max(radius - 5, 3))
 
     def _finish(self, env, mode: str):
         if mode == "rgb_array":

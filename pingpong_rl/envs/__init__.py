@@ -8,6 +8,7 @@ from pingpong_rl.envs.gravity_env import GravityPingPongEnv
 from pingpong_rl.envs.league_self_play_env import LeagueSelfPlayEnv
 from pingpong_rl.envs.pong_env import PongEnv, make_pong_config
 from pingpong_rl.envs.realistic_env import RealisticPingPongEnv
+from pingpong_rl.envs.robot_arm_env import RobotArmPingPongEnv
 from pingpong_rl.envs.self_play_variety_env import SelfPlayVarietyEnv
 from pingpong_rl.envs.variety_technique_env import VarietyTechniqueEnv
 
@@ -20,6 +21,7 @@ __all__ = [
     "LeagueSelfPlayEnv",
     "PongEnv",
     "RealisticPingPongEnv",
+    "RobotArmPingPongEnv",
     "SelfPlayVarietyEnv",
     "VarietyTechniqueEnv",
     "make_pong_config",
