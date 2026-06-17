@@ -144,6 +144,8 @@ class PygameRenderer:
                 gravity_mode = f"variety {getattr(env, 'last_target_style', 'none')}"
             elif hasattr(env, "compact_technique_hits"):
                 gravity_mode = f"compact {getattr(env, 'last_stroke_type', 'none')}"
+            elif getattr(env, "robot_arm_adaptive_attack_enabled", False):
+                gravity_mode = f"robot_adaptive {getattr(env, 'last_stroke_type', 'none')}"
             elif getattr(env, "robot_arm_attack_league_enabled", False):
                 gravity_mode = f"robot_attack {getattr(env, 'last_stroke_type', 'none')}"
             elif getattr(env, "robot_arm_tactical_league_enabled", False):

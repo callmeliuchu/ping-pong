@@ -460,12 +460,43 @@ models/selfplay/stage17/gen_1.zip
 models/best/stage17/best_model.zip
 ```
 
-## Validate All Stages
+## Stage 18: Adaptive Placement Attack League
 
-Run the full seventeen-stage gate check:
+Stage 18 keeps the Stage 17 attacking policy but evaluates it against multiple
+red-side pressure tolerance profiles: resistant, balanced, and fragile. It also
+adds a 2D-compatible placement objective: deep pressure shots should pull the
+red robot arm out of alignment before scoring. The key gate is no longer just
+average win rate; the policy must keep a useful minimum win rate across profiles
+and produce combo attack scores without relying on wrong-side gifts.
+
+Train, evaluate, and watch Stage 18:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100
+python -m train.train_robot_arm_adaptive_attack --generation 1 --base-model-path models/passed/ppo_stage17 --timesteps 120000
+python -m train.evaluate_robot_arm_adaptive_attack --model-path models/passed/ppo_stage18 --episodes 30
+python -m play.watch_stage18 --model-path models/passed/ppo_stage18 --seed 0
+```
+
+Export a Pygame-rendered adaptive attack GIF:
+
+```bash
+SDL_VIDEODRIVER=dummy python -m play.watch_stage18 --model-path models/passed/ppo_stage18 --seed 0 --gif-path logs/ppo_robot_arm_adaptive_attack_stage18/stage18_robot_arm_adaptive_attack.gif --max-steps 1600
+```
+
+The current Stage 18 model is available at:
+
+```text
+models/passed/ppo_stage18.zip
+models/selfplay/stage18/gen_1.zip
+models/best/stage18/best_model.zip
+```
+
+## Validate All Stages
+
+Run the full eighteen-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100 --stage18-episodes 30
 ```
 
 Passing models are copied to:
@@ -488,6 +519,7 @@ models/passed/ppo_stage14.zip
 models/passed/ppo_stage15.zip
 models/passed/ppo_stage16.zip
 models/passed/ppo_stage17.zip
+models/passed/ppo_stage18.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.

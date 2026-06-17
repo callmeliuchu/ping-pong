@@ -17,6 +17,7 @@ from pingpong_rl.envs import (
     LeagueSelfPlayEnv,
     PongEnv,
     RealisticPingPongEnv,
+    RobotArmAdaptiveAttackEnv,
     RobotArmAttackLeagueEnv,
     RobotArmLeagueEnv,
     RobotArmPingPongEnv,
@@ -26,6 +27,7 @@ from pingpong_rl.envs import (
     make_pong_config,
 )
 from pingpong_rl.envs.league_self_play_env import LeagueSelfPlayConfig
+from pingpong_rl.envs.robot_arm_adaptive_attack_env import RobotArmAdaptiveAttackConfig
 from pingpong_rl.envs.robot_arm_attack_league_env import RobotArmAttackLeagueConfig
 from pingpong_rl.envs.robot_arm_league_env import RobotArmLeagueConfig
 from pingpong_rl.envs.robot_arm_tactical_league_env import RobotArmTacticalLeagueConfig
@@ -38,6 +40,10 @@ from train.evaluate_league_stage13 import default_opponent_paths, evaluate_leagu
 from train.evaluate_realistic import evaluate_realistic_model
 from train.evaluate_competitive import evaluate_competitive_model
 from train.evaluate_robot_arm import evaluate_robot_arm_model
+from train.evaluate_robot_arm_adaptive_attack import (
+    default_adaptive_opponent_paths,
+    evaluate_robot_arm_adaptive_attack_model,
+)
 from train.evaluate_robot_arm_attack import default_attack_opponent_paths, evaluate_robot_arm_attack_model
 from train.evaluate_robot_arm_league import default_robot_arm_opponent_paths, evaluate_robot_arm_league_model
 from train.evaluate_robot_arm_tactical import default_tactical_opponent_paths, evaluate_robot_arm_tactical_model
@@ -105,6 +111,7 @@ def _check_envs() -> None:
     check_env(RobotArmLeagueEnv(config=RobotArmLeagueConfig()))
     check_env(RobotArmTacticalLeagueEnv(config=RobotArmTacticalLeagueConfig()))
     check_env(RobotArmAttackLeagueEnv(config=RobotArmAttackLeagueConfig()))
+    check_env(RobotArmAdaptiveAttackEnv(config=RobotArmAdaptiveAttackConfig()))
 
 
 def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
@@ -303,6 +310,28 @@ def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
             and metrics["avg_reward"] > 22.0,
             "opponent_pool_size >= 6, opponent_loaded_rate >= 1.0, normal_end_rate >= 0.95, pool_win_rate >= 0.45, hit_rate >= 0.90, avg_rally_length >= 8, avg_legal_landings >= 10, loop_landing_rate >= 0.85, drive_landing_rate >= 0.85, topspin_landing_rate >= 0.85, attack_landing_rate >= 0.85, high_pressure_rate >= 0.45, avg_max_attack_pressure >= 0.55, wrong_side_score_rate <= 0.08, clean_attack_score_rate >= 0.35, avg_reward > 22",
         )
+    if stage == 18:
+        return (
+            metrics["opponent_pool_size"] >= 7
+            and metrics["profile_count"] >= 3
+            and metrics["matchup_count"] >= 21
+            and metrics["opponent_loaded_rate"] >= 1.0
+            and metrics["normal_end_rate"] >= 0.95
+            and metrics["pool_win_rate"] >= 0.55
+            and metrics["min_profile_win_rate"] >= 0.40
+            and metrics["worst_matchup_win_rate"] >= 0.30
+            and metrics["hit_rate"] >= 0.90
+            and metrics["avg_rally_length"] >= 7.0
+            and metrics["avg_legal_landings"] >= 9.0
+            and metrics["loop_landing_rate"] >= 0.85
+            and metrics["drive_landing_rate"] >= 0.85
+            and metrics["topspin_landing_rate"] >= 0.85
+            and metrics["combo_attack_rate"] >= 0.45
+            and metrics["adaptive_clean_score_rate"] >= 0.18
+            and metrics["wrong_side_score_rate"] <= 0.08
+            and metrics["avg_reward"] > 20.0,
+            "opponent_pool_size >= 7, profile_count >= 3, matchup_count >= 21, opponent_loaded_rate >= 1.0, normal_end_rate >= 0.95, pool_win_rate >= 0.55, min_profile_win_rate >= 0.40, worst_matchup_win_rate >= 0.30, hit_rate >= 0.90, avg_rally_length >= 7, avg_legal_landings >= 9, loop_landing_rate >= 0.85, drive_landing_rate >= 0.85, topspin_landing_rate >= 0.85, combo_attack_rate >= 0.45, adaptive_clean_score_rate >= 0.18, wrong_side_score_rate <= 0.08, avg_reward > 20",
+        )
     raise ValueError(stage)
 
 
@@ -325,6 +354,7 @@ def _suggestion(stage: int) -> str:
         15: "python -m train.train_robot_arm_league --generation 3 --base-model-path models/passed/ppo_stage15 --timesteps 200000",
         16: "python -m train.train_robot_arm_tactical --generation 2 --base-model-path models/passed/ppo_stage16 --timesteps 120000",
         17: "python -m train.train_robot_arm_attack --generation 2 --base-model-path models/passed/ppo_stage17 --timesteps 160000",
+        18: "python -m train.train_robot_arm_adaptive_attack --generation 2 --base-model-path models/passed/ppo_stage18 --timesteps 120000",
     }
     return suggestions[stage]
 
@@ -414,6 +444,14 @@ def _print_table(results: list[StageResult]) -> None:
                 f"pressure={metrics['high_pressure_rate']:.3f}, clean_score={metrics['clean_attack_score_rate']:.3f}, "
                 f"wrong={metrics['wrong_side_score_rate']:.3f}, reward={metrics['avg_reward']:.3f}"
             )
+        elif result.stage == 18:
+            key_metrics = (
+                f"profiles={metrics['profile_count']}, win={metrics['pool_win_rate']:.3f}, "
+                f"min_profile={metrics['min_profile_win_rate']:.3f}, worst={metrics['worst_matchup_win_rate']:.3f}, "
+                f"rally={metrics['avg_rally_length']:.2f}, legal={metrics['avg_legal_landings']:.1f}, "
+                f"combo={metrics['combo_attack_rate']:.3f}, adaptive={metrics['adaptive_clean_score_rate']:.3f}, "
+                f"wrong={metrics['wrong_side_score_rate']:.3f}, reward={metrics['avg_reward']:.3f}"
+            )
         else:
             key_metrics = (
                 f"robot={metrics['robot_arm_enabled_rate']:.3f}, hit={metrics['hit_rate']:.3f}, "
@@ -439,7 +477,7 @@ def _print_table(results: list[StageResult]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate all seventeen ping pong RL stages.")
+    parser = argparse.ArgumentParser(description="Validate all eighteen ping pong RL stages.")
     parser.add_argument("--episodes", type=int, default=200)
     parser.add_argument("--stage6-episodes", type=int, default=100)
     parser.add_argument("--stage7-episodes", type=int, default=100)
@@ -453,6 +491,7 @@ def main() -> None:
     parser.add_argument("--stage15-episodes", type=int, default=100)
     parser.add_argument("--stage16-episodes", type=int, default=100)
     parser.add_argument("--stage17-episodes", type=int, default=100)
+    parser.add_argument("--stage18-episodes", type=int, default=30)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--skip-check-env", action="store_true")
     parser.add_argument("--json-dir", type=Path, default=ROOT / "logs" / "validation")
@@ -481,6 +520,7 @@ def main() -> None:
         15: _preferred_model_path(15, ROOT / "models" / "ppo_robot_arm_league_stage15"),
         16: _preferred_model_path(16, ROOT / "models" / "ppo_robot_arm_tactical_stage16"),
         17: _preferred_model_path(17, ROOT / "models" / "ppo_robot_arm_attack_stage17"),
+        18: _preferred_model_path(18, ROOT / "models" / "ppo_robot_arm_adaptive_attack_stage18"),
     }
 
     raw_results: list[tuple[int, dict[str, Any], Path | None]] = [
@@ -545,6 +585,16 @@ def main() -> None:
                 seed=args.seed,
             ),
             stage_models[17],
+        ),
+        (
+            18,
+            evaluate_robot_arm_adaptive_attack_model(
+                stage_models[18],
+                default_adaptive_opponent_paths(),
+                args.stage18_episodes,
+                seed=args.seed,
+            ),
+            stage_models[18],
         ),
     ]
 

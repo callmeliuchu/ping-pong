@@ -46,6 +46,12 @@ class RobotArmAttackLeagueEnv(RobotArmTacticalLeagueEnv):
         self.last_attack_pressure = 0.0
         self.max_attack_pressure = 0.0
 
+    def _pressure_tracking_offset(self) -> float:
+        return self.config.pressure_tracking_offset
+
+    def _pressure_slowdown(self) -> float:
+        return self.config.pressure_slowdown
+
     def reset(self, seed: int | None = None, options: dict | None = None):
         obs, info = super().reset(seed=seed, options=options)
         self.attack_landings = 0
@@ -78,7 +84,7 @@ class RobotArmAttackLeagueEnv(RobotArmTacticalLeagueEnv):
             target_x = float(np.clip(self.ball_x + 34.0, self.config.opponent_x_min, self.config.opponent_x_max))
             target_y = self.predict_ball_y_at_x(target_x)
             vertical_misread = 1.0 if self.ball_y < self.opponent_y else -0.85
-            target_y += pressure * self.config.pressure_tracking_offset * vertical_misread
+            target_y += pressure * self._pressure_tracking_offset() * vertical_misread
             desired_angle = 0.40 if self.ball_y < self.opponent_y else -0.08
             desired_angle += 0.16 * pressure
         else:
@@ -88,7 +94,7 @@ class RobotArmAttackLeagueEnv(RobotArmTacticalLeagueEnv):
             self.last_attack_pressure = max(0.0, self.last_attack_pressure * 0.90)
         target_y = float(np.clip(target_y, self.config.table_y - 205.0, self.config.table_y - self.config.paddle_height / 2))
         target_angles = self._ik_for_paddle("opponent", target_x, target_y, desired_angle)
-        pressure_slowdown = 1.0 - self.config.pressure_slowdown * pressure
+        pressure_slowdown = 1.0 - self._pressure_slowdown() * pressure
         base_limit = speeds * max(0.52, pressure_slowdown)
         base_delta = np.clip(target_angles - self.opponent_joint_angles, -base_limit, base_limit)
         residual_delta = mirrored * speeds * self.config.opponent_model_residual_scale
