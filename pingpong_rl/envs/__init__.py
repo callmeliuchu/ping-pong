@@ -11,6 +11,7 @@ from pingpong_rl.envs.realistic_env import RealisticPingPongEnv
 from pingpong_rl.envs.robot_arm_adaptive_attack_env import RobotArmAdaptiveAttackEnv
 from pingpong_rl.envs.robot_arm_league_env import RobotArmLeagueEnv
 from pingpong_rl.envs.robot_arm_attack_league_env import RobotArmAttackLeagueEnv
+from pingpong_rl.envs.robot_arm_clean_adaptive_attack_env import RobotArmCleanAdaptiveAttackEnv
 from pingpong_rl.envs.robot_arm_env import RobotArmPingPongEnv
 from pingpong_rl.envs.robot_arm_tactical_league_env import RobotArmTacticalLeagueEnv
 from pingpong_rl.envs.self_play_variety_env import SelfPlayVarietyEnv
@@ -28,6 +29,7 @@ __all__ = [
     "RobotArmAdaptiveAttackEnv",
     "RobotArmLeagueEnv",
     "RobotArmAttackLeagueEnv",
+    "RobotArmCleanAdaptiveAttackEnv",
     "RobotArmPingPongEnv",
     "RobotArmTacticalLeagueEnv",
     "SelfPlayVarietyEnv",
