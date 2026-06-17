@@ -361,12 +361,49 @@ models/ppo_robot_arm_stage14_spin_v2.zip
 models/best/stage14/best_model.zip
 ```
 
-## Validate All Stages
+## Stage 15: Robot-Arm League Self-Play
 
-Run the full fourteen-stage gate check:
+Stage 15 keeps the Stage 14 joint-controlled robot arm and replaces the
+single scripted red-side opponent with a league bootstrap. The red side can
+load historical robot-arm PPO models from a pool, mirror the observation into
+its own shoulder/elbow/wrist action space, and add model-driven residual
+stroke control over an IK tracking controller. This makes the opponent a
+repeatable model-pool challenger instead of only a fixed warm-up script.
+
+The Stage 15 gate checks that the blue champion beats a multi-model pool while
+preserving sustained topspin/drive rallies. The current passed model averages
+8+ rally hits against the pool, loads red-side model opponents every episode,
+and keeps loop, drive, and topspin landing rates above 0.90.
+
+Train, evaluate, evolve, and watch Stage 15:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100
+python -m train.train_robot_arm_league --generation 2 --base-model-path models/passed/ppo_stage15 --timesteps 150000
+python -m train.evaluate_robot_arm_league --model-path models/passed/ppo_stage15 --episodes 100
+python -m train.evolve_robot_arm_league --generation 3 --base-model-path models/passed/ppo_stage15 --timesteps 200000
+python -m play.watch_stage15 --model-path models/passed/ppo_stage15 --seed 0
+```
+
+Export a Pygame-rendered league GIF:
+
+```bash
+SDL_VIDEODRIVER=dummy python -m play.watch_stage15 --model-path models/passed/ppo_stage15 --seed 0 --gif-path logs/ppo_robot_arm_league_stage15/stage15_robot_arm_league.gif --max-steps 1400
+```
+
+The current Stage 15 model is available at:
+
+```text
+models/passed/ppo_stage15.zip
+models/selfplay/stage15/gen_2.zip
+models/best/stage15/best_model.zip
+```
+
+## Validate All Stages
+
+Run the full fifteen-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100
 ```
 
 Passing models are copied to:
@@ -386,6 +423,7 @@ models/passed/ppo_stage11.zip
 models/passed/ppo_stage12.zip
 models/passed/ppo_stage13.zip
 models/passed/ppo_stage14.zip
+models/passed/ppo_stage15.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.

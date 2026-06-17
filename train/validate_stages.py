@@ -17,12 +17,14 @@ from pingpong_rl.envs import (
     LeagueSelfPlayEnv,
     PongEnv,
     RealisticPingPongEnv,
+    RobotArmLeagueEnv,
     RobotArmPingPongEnv,
     SelfPlayVarietyEnv,
     VarietyTechniqueEnv,
     make_pong_config,
 )
 from pingpong_rl.envs.league_self_play_env import LeagueSelfPlayConfig
+from pingpong_rl.envs.robot_arm_league_env import RobotArmLeagueConfig
 from pingpong_rl.envs.self_play_variety_env import SelfPlayVarietyConfig
 from train.eval_utils import ROOT, evaluate_pong, evaluate_stage1, smoke_gravity, write_metrics
 from train.evaluate_advanced import evaluate_advanced_model
@@ -32,6 +34,7 @@ from train.evaluate_league_stage13 import default_opponent_paths, evaluate_leagu
 from train.evaluate_realistic import evaluate_realistic_model
 from train.evaluate_competitive import evaluate_competitive_model
 from train.evaluate_robot_arm import evaluate_robot_arm_model
+from train.evaluate_robot_arm_league import default_robot_arm_opponent_paths, evaluate_robot_arm_league_model
 from train.evaluate_selfplay import evaluate_selfplay_model
 from train.evaluate_variety import evaluate_variety_model
 
@@ -93,6 +96,7 @@ def _check_envs() -> None:
         )
     )
     check_env(RobotArmPingPongEnv())
+    check_env(RobotArmLeagueEnv(config=RobotArmLeagueConfig()))
 
 
 def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
@@ -240,6 +244,22 @@ def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
             and metrics["avg_reward"] > 0.0,
             "robot_arm_enabled_rate >= 1.0, normal_end_rate >= 0.80, hit_rate >= 0.90, avg_rally_length >= 8, loop_landing_rate >= 0.80, drive_landing_rate >= 0.80, topspin_landing_rate >= 0.80, avg_max_topspin >= 3, avg_tracking_error <= 45, avg_reward > 0",
         )
+    if stage == 15:
+        return (
+            metrics["opponent_pool_size"] >= 4
+            and metrics["opponent_loaded_rate"] >= 1.0
+            and metrics["normal_end_rate"] >= 0.95
+            and metrics["pool_win_rate"] >= 0.60
+            and metrics["worst_opponent_win_rate"] >= 0.55
+            and metrics["hit_rate"] >= 0.90
+            and metrics["avg_rally_length"] >= 8.0
+            and metrics["loop_landing_rate"] >= 0.85
+            and metrics["drive_landing_rate"] >= 0.85
+            and metrics["topspin_landing_rate"] >= 0.85
+            and metrics["avg_max_topspin"] >= 3.5
+            and metrics["avg_reward"] > 0.0,
+            "opponent_pool_size >= 4, opponent_loaded_rate >= 1.0, normal_end_rate >= 0.95, pool_win_rate >= 0.60, worst_opponent_win_rate >= 0.55, hit_rate >= 0.90, avg_rally_length >= 8, loop_landing_rate >= 0.85, drive_landing_rate >= 0.85, topspin_landing_rate >= 0.85, avg_max_topspin >= 3.5, avg_reward > 0",
+        )
     raise ValueError(stage)
 
 
@@ -259,6 +279,7 @@ def _suggestion(stage: int) -> str:
         12: "python -m train.train_selfplay_stage12 --generation 1 --base-model-path models/passed/ppo_stage11 --opponent-model-path models/passed/ppo_stage11 --timesteps 200000",
         13: "python -m train.train_league_stage13 --generation 3 --base-model-path models/passed/ppo_stage13 --timesteps 200000",
         14: "python -m train.train_robot_arm --load-model-path models/ppo_robot_arm_stage14 --timesteps 300000",
+        15: "python -m train.train_robot_arm_league --generation 3 --base-model-path models/passed/ppo_stage15 --timesteps 200000",
     }
     return suggestions[stage]
 
@@ -358,7 +379,7 @@ def _print_table(results: list[StageResult]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate all fourteen ping pong RL stages.")
+    parser = argparse.ArgumentParser(description="Validate all fifteen ping pong RL stages.")
     parser.add_argument("--episodes", type=int, default=200)
     parser.add_argument("--stage6-episodes", type=int, default=100)
     parser.add_argument("--stage7-episodes", type=int, default=100)
@@ -369,6 +390,7 @@ def main() -> None:
     parser.add_argument("--stage12-episodes", type=int, default=100)
     parser.add_argument("--stage13-episodes", type=int, default=100)
     parser.add_argument("--stage14-episodes", type=int, default=100)
+    parser.add_argument("--stage15-episodes", type=int, default=100)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--skip-check-env", action="store_true")
     parser.add_argument("--json-dir", type=Path, default=ROOT / "logs" / "validation")
@@ -394,6 +416,7 @@ def main() -> None:
         12: _preferred_model_path(12, ROOT / "models" / "ppo_selfplay_stage12"),
         13: _preferred_model_path(13, ROOT / "models" / "ppo_league_stage13"),
         14: _preferred_model_path(14, ROOT / "models" / "ppo_robot_arm_stage14"),
+        15: _preferred_model_path(15, ROOT / "models" / "ppo_robot_arm_league_stage15"),
     }
 
     raw_results: list[tuple[int, dict[str, Any], Path | None]] = [
@@ -429,6 +452,16 @@ def main() -> None:
             stage_models[13],
         ),
         (14, evaluate_robot_arm_model(stage_models[14], args.stage14_episodes, seed=args.seed), stage_models[14]),
+        (
+            15,
+            evaluate_robot_arm_league_model(
+                stage_models[15],
+                default_robot_arm_opponent_paths(),
+                args.stage15_episodes,
+                seed=args.seed,
+            ),
+            stage_models[15],
+        ),
     ]
 
     results: list[StageResult] = []
