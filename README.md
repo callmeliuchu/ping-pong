@@ -581,12 +581,52 @@ models/selfplay/stage21/gen_1.zip
 models/best/stage21/best_model.zip
 ```
 
-## Validate All Stages
+## Stage 22: Bilateral Champion League
 
-Run the full twenty-one-stage gate check:
+Stage 22 turns the red side into a trainable champion candidate. Blue and red
+start from the Stage 21 champion, then `evolve_robot_arm_bilateral_league`
+alternates training sides. A blue generation trains against the red/model pool;
+a red generation uses a mirrored robot-arm environment where the external PPO
+action controls the red paddle while blue is loaded from the current champion.
+Candidates are promoted only when their win-rate/Elo-style score improves the
+incumbent.
+
+The initial Stage 22 red champion is a trainable model opponent and is evaluated
+with `red_challenge_*` metrics. In the current bootstrap it can load, hit, and
+sustain rallies against blue, but it has not yet promoted to a red champion that
+beats blue on win rate.
+
+Train, evaluate, and watch Stage 22:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100 --stage18-episodes 30 --stage19-episodes 30 --stage20-episodes 30 --stage21-episodes 30
+python -m train.evolve_robot_arm_bilateral_league --start-generation 1 --generations 2 --train-side alternate --timesteps-per-generation 120000
+python -m train.evaluate_robot_arm_bilateral_league --model-path models/passed/ppo_stage22 --episodes 30
+python -m train.evaluate_robot_arm_bilateral_league --red-challenge-model-path models/passed/ppo_stage22_red --blue-model-path models/passed/ppo_stage22_blue --episodes 30
+python -m play.watch_stage22 --model-path models/passed/ppo_stage22_blue --seed 0
+```
+
+Export a Pygame-rendered bilateral league GIF:
+
+```bash
+SDL_VIDEODRIVER=dummy python -m play.watch_stage22 --model-path models/passed/ppo_stage22_blue --seed 0 --gif-path logs/ppo_robot_arm_bilateral_stage22/stage22_robot_arm_bilateral.gif --max-steps 1600
+```
+
+The current Stage 22 models are available at:
+
+```text
+models/passed/ppo_stage22.zip
+models/passed/ppo_stage22_blue.zip
+models/passed/ppo_stage22_red.zip
+models/selfplay/stage22/blue_gen_1.zip
+models/selfplay/stage22/red_gen_2.zip
+```
+
+## Validate All Stages
+
+Run the full twenty-two-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100 --stage18-episodes 30 --stage19-episodes 30 --stage20-episodes 30 --stage21-episodes 30 --stage22-episodes 30
 ```
 
 Passing models are copied to:
@@ -613,6 +653,7 @@ models/passed/ppo_stage18.zip
 models/passed/ppo_stage19.zip
 models/passed/ppo_stage20.zip
 models/passed/ppo_stage21.zip
+models/passed/ppo_stage22.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.
