@@ -25,8 +25,10 @@ from pingpong_rl.envs import (
     RobotArmGrandChampionAttackEnv,
     RobotArmLeagueEnv,
     RobotArmPingPongEnv,
+    RobotArmRedScoringBilateralEnv,
     RobotArmTacticalLeagueEnv,
     RedRobotArmBilateralLeagueEnv,
+    RedRobotArmRedScoringBilateralEnv,
     SelfPlayVarietyEnv,
     VarietyTechniqueEnv,
     make_pong_config,
@@ -39,6 +41,7 @@ from pingpong_rl.envs.robot_arm_champion_attack_env import RobotArmChampionAttac
 from pingpong_rl.envs.robot_arm_clean_adaptive_attack_env import RobotArmCleanAdaptiveAttackConfig
 from pingpong_rl.envs.robot_arm_grand_champion_attack_env import RobotArmGrandChampionAttackConfig
 from pingpong_rl.envs.robot_arm_league_env import RobotArmLeagueConfig
+from pingpong_rl.envs.robot_arm_red_scoring_bilateral_env import RobotArmRedScoringBilateralConfig
 from pingpong_rl.envs.robot_arm_tactical_league_env import RobotArmTacticalLeagueConfig
 from pingpong_rl.envs.self_play_variety_env import SelfPlayVarietyConfig
 from train.eval_utils import ROOT, evaluate_pong, evaluate_stage1, smoke_gravity, write_metrics
@@ -70,6 +73,11 @@ from train.evaluate_robot_arm_bilateral_league import (
     default_bilateral_opponent_paths,
     evaluate_blue_bilateral_model,
     evaluate_red_challenge,
+)
+from train.evaluate_robot_arm_red_scoring_bilateral import (
+    default_red_scoring_bilateral_opponent_paths,
+    evaluate_blue_red_scoring_bilateral_model,
+    evaluate_red_scoring_challenge,
 )
 from train.evaluate_robot_arm_league import default_robot_arm_opponent_paths, evaluate_robot_arm_league_model
 from train.evaluate_robot_arm_tactical import default_tactical_opponent_paths, evaluate_robot_arm_tactical_model
@@ -145,6 +153,14 @@ def _check_envs() -> None:
     check_env(
         RedRobotArmBilateralLeagueEnv(
             config=RobotArmBilateralLeagueConfig(blue_model_paths=(str(ROOT / "models" / "passed" / "ppo_stage21"),))
+        )
+    )
+    check_env(RobotArmRedScoringBilateralEnv(config=RobotArmRedScoringBilateralConfig()))
+    check_env(
+        RedRobotArmRedScoringBilateralEnv(
+            config=RobotArmRedScoringBilateralConfig(
+                blue_model_paths=(str(ROOT / "models" / "passed" / "ppo_stage22_blue"),)
+            )
         )
     )
 
@@ -469,6 +485,16 @@ def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
             and metrics["avg_reward"] > 20.0,
             "opponent_pool_size >= 13, profile_count >= 3, matchup_count >= 39, opponent_loaded_rate >= 1.0, normal_end_rate >= 0.95, pool_win_rate >= 0.62, min_profile_win_rate >= 0.55, worst_matchup_win_rate >= 0.35, hit_rate >= 0.90, avg_rally_length >= 6.5, avg_legal_landings >= 8.5, loop_landing_rate >= 0.85, drive_landing_rate >= 0.85, topspin_landing_rate >= 0.85, combo_attack_rate >= 0.55, forced_finish_rate >= 0.35, timely_finish_rate >= 0.20, stalemate_rate <= 0.35, wrong_side_score_rate <= 0.03, red_challenge_normal_end_rate >= 0.95, red_challenge_hit_rate >= 0.90, red_challenge_avg_rally_length >= 3.5, avg_reward > 20",
         )
+    if stage == 23:
+        return (
+            metrics["pool_win_rate"] >= 0.60
+            and metrics["red_challenge_win_rate"] >= 0.05
+            and metrics["red_challenge_hit_rate"] >= 0.90
+            and metrics["red_challenge_avg_rally_length"] >= 4.5
+            and metrics["red_challenge_normal_end_rate"] >= 0.95
+            and metrics["normal_end_rate"] >= 0.95,
+            "pool_win_rate >= 0.60, red_challenge_win_rate >= 0.05, red_challenge_hit_rate >= 0.90, red_challenge_avg_rally_length >= 4.5, red_challenge_normal_end_rate >= 0.95, normal_end_rate >= 0.95",
+        )
     raise ValueError(stage)
 
 
@@ -496,6 +522,7 @@ def _suggestion(stage: int) -> str:
         20: "python -m train.train_robot_arm_champion_attack --generation 2 --base-model-path models/passed/ppo_stage20 --timesteps 120000",
         21: "python -m train.train_robot_arm_grand_champion_attack --generation 2 --base-model-path models/passed/ppo_stage21 --timesteps 120000",
         22: "python -m train.evolve_robot_arm_bilateral_league --start-generation 2 --generations 2 --train-side alternate --timesteps-per-generation 120000",
+        23: "python -m train.evolve_robot_arm_red_scoring_bilateral --start-generation 1 --generations 6 --timesteps-per-generation 120000",
     }
     return suggestions[stage]
 
@@ -630,6 +657,14 @@ def _print_table(results: list[StageResult]) -> None:
                 f"stale={metrics['stalemate_rate']:.3f}, combo={metrics['combo_attack_rate']:.3f}, "
                 f"wrong={metrics['wrong_side_score_rate']:.3f}, reward={metrics['avg_reward']:.3f}"
             )
+        elif result.stage == 23:
+            key_metrics = (
+                f"win={metrics['pool_win_rate']:.3f}, red_chal={metrics['red_challenge_win_rate']:.3f}, "
+                f"red_hit={metrics['red_challenge_hit_rate']:.3f}, "
+                f"red_rally={metrics['red_challenge_avg_rally_length']:.2f}, "
+                f"normal={metrics['normal_end_rate']:.3f}, forced={metrics['forced_finish_rate']:.3f}, "
+                f"stale={metrics['stalemate_rate']:.3f}, reward={metrics['avg_reward']:.3f}"
+            )
         else:
             key_metrics = (
                 f"robot={metrics['robot_arm_enabled_rate']:.3f}, hit={metrics['hit_rate']:.3f}, "
@@ -655,7 +690,7 @@ def _print_table(results: list[StageResult]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate all twenty-two ping pong RL stages.")
+    parser = argparse.ArgumentParser(description="Validate all twenty-three ping pong RL stages.")
     parser.add_argument("--episodes", type=int, default=200)
     parser.add_argument("--stage6-episodes", type=int, default=100)
     parser.add_argument("--stage7-episodes", type=int, default=100)
@@ -674,6 +709,7 @@ def main() -> None:
     parser.add_argument("--stage20-episodes", type=int, default=30)
     parser.add_argument("--stage21-episodes", type=int, default=30)
     parser.add_argument("--stage22-episodes", type=int, default=30)
+    parser.add_argument("--stage23-episodes", type=int, default=30)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--skip-check-env", action="store_true")
     parser.add_argument("--json-dir", type=Path, default=ROOT / "logs" / "validation")
@@ -707,6 +743,7 @@ def main() -> None:
         20: _preferred_model_path(20, ROOT / "models" / "ppo_robot_arm_champion_attack_stage20"),
         21: _preferred_model_path(21, ROOT / "models" / "ppo_robot_arm_grand_champion_attack_stage21"),
         22: _preferred_model_path(22, ROOT / "models" / "passed" / "ppo_stage22_blue"),
+        23: _preferred_model_path(23, ROOT / "models" / "passed" / "ppo_stage23_blue"),
     }
 
     raw_results: list[tuple[int, dict[str, Any], Path | None]] = [
@@ -836,6 +873,30 @@ def main() -> None:
         }
     )
     raw_results.append((22, stage22_blue_metrics, stage_models[22]))
+
+    stage23_blue_metrics = evaluate_blue_red_scoring_bilateral_model(
+        stage_models[23],
+        default_red_scoring_bilateral_opponent_paths(),
+        args.stage23_episodes,
+        seed=args.seed,
+    )
+    stage23_red_metrics = evaluate_red_scoring_challenge(
+        ROOT / "models" / "passed" / "ppo_stage23_red",
+        stage_models[23],
+        args.stage23_episodes,
+        seed=args.seed + 600_000,
+    )
+    stage23_blue_metrics.update(
+        {
+            "red_challenge_win_rate": stage23_red_metrics["red_win_rate"],
+            "red_challenge_hit_rate": stage23_red_metrics["red_hit_rate"],
+            "red_challenge_normal_end_rate": stage23_red_metrics["normal_end_rate"],
+            "red_challenge_avg_rally_length": stage23_red_metrics["avg_rally_length"],
+            "red_challenge_estimated_elo_delta": stage23_red_metrics["red_estimated_elo_delta"],
+            "red_challenge_metrics": stage23_red_metrics,
+        }
+    )
+    raw_results.append((23, stage23_blue_metrics, stage_models[23]))
 
     results: list[StageResult] = []
     for stage, metrics, model_path in raw_results:

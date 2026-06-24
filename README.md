@@ -621,12 +621,50 @@ models/selfplay/stage22/blue_gen_1.zip
 models/selfplay/stage22/red_gen_2.zip
 ```
 
-## Validate All Stages
+## Stage 23: Red Scoring Bilateral League
 
-Run the full twenty-two-stage gate check:
+Stage 23 keeps the Stage 22 champions intact and starts a new bilateral league
+focused on red-side scoring. Red generations are rewarded more strongly for
+legal deep/wide landings, forced finishes, second-bounce points, and shots that
+make blue miss. Long rallies without a point receive less reward, so red is
+nudged away from gentle neutral returns.
+
+The default evolution order is `red, red, blue, red, red, blue`. Red promotes
+when it keeps reliable contact and reaches a non-zero challenge win rate
+(`red_win_rate >= 0.08`) or improves over the incumbent by at least `0.05`.
+Blue promotion keeps the Stage 22 defensive/offensive safeguards.
+
+Train, evaluate, and watch Stage 23:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100 --stage18-episodes 30 --stage19-episodes 30 --stage20-episodes 30 --stage21-episodes 30 --stage22-episodes 30
+python -m train.evolve_robot_arm_red_scoring_bilateral --start-generation 1 --generations 6 --timesteps-per-generation 120000
+python -m train.evaluate_robot_arm_red_scoring_bilateral --model-path models/passed/ppo_stage23 --episodes 30
+python -m train.evaluate_robot_arm_red_scoring_bilateral --red-challenge-model-path models/passed/ppo_stage23_red --blue-model-path models/passed/ppo_stage23_blue --episodes 30
+python -m play.watch_stage23 --model-path models/passed/ppo_stage23_blue --red-model-path models/passed/ppo_stage23_red --seed 0
+```
+
+Export Pygame-rendered Stage 23 GIFs:
+
+```bash
+SDL_VIDEODRIVER=dummy python -m play.watch_stage23 --model-path models/passed/ppo_stage23_blue --seed 0 --gif-path logs/ppo_robot_arm_red_scoring_bilateral_stage23/stage23_blue_pool.gif --max-steps 1600
+SDL_VIDEODRIVER=dummy python -m play.watch_stage23 --model-path models/passed/ppo_stage23_blue --red-model-path models/passed/ppo_stage23_red --seed 0 --gif-path logs/ppo_robot_arm_red_scoring_bilateral_stage23/stage23_red_challenge.gif --max-steps 1600
+```
+
+Stage 23 writes champions to:
+
+```text
+models/passed/ppo_stage23.zip
+models/passed/ppo_stage23_blue.zip
+models/passed/ppo_stage23_red.zip
+models/selfplay/stage23/
+```
+
+## Validate All Stages
+
+Run the full twenty-three-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100 --stage18-episodes 30 --stage19-episodes 30 --stage20-episodes 30 --stage21-episodes 30 --stage22-episodes 30 --stage23-episodes 30
 ```
 
 Passing models are copied to:
@@ -654,6 +692,7 @@ models/passed/ppo_stage19.zip
 models/passed/ppo_stage20.zip
 models/passed/ppo_stage21.zip
 models/passed/ppo_stage22.zip
+models/passed/ppo_stage23.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.

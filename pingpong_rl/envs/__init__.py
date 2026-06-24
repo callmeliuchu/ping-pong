@@ -13,6 +13,10 @@ from pingpong_rl.envs.robot_arm_bilateral_league_env import RobotArmBilateralLea
 from pingpong_rl.envs.robot_arm_champion_attack_env import RobotArmChampionAttackEnv
 from pingpong_rl.envs.robot_arm_grand_champion_attack_env import RobotArmGrandChampionAttackEnv
 from pingpong_rl.envs.robot_arm_league_env import RobotArmLeagueEnv
+from pingpong_rl.envs.robot_arm_red_scoring_bilateral_env import (
+    RedRobotArmRedScoringBilateralEnv,
+    RobotArmRedScoringBilateralEnv,
+)
 from pingpong_rl.envs.robot_arm_attack_league_env import RobotArmAttackLeagueEnv
 from pingpong_rl.envs.robot_arm_clean_adaptive_attack_env import RobotArmCleanAdaptiveAttackEnv
 from pingpong_rl.envs.robot_arm_env import RobotArmPingPongEnv
@@ -37,8 +41,10 @@ __all__ = [
     "RobotArmAttackLeagueEnv",
     "RobotArmCleanAdaptiveAttackEnv",
     "RobotArmPingPongEnv",
+    "RobotArmRedScoringBilateralEnv",
     "RobotArmTacticalLeagueEnv",
     "RedRobotArmBilateralLeagueEnv",
+    "RedRobotArmRedScoringBilateralEnv",
     "SelfPlayVarietyEnv",
     "VarietyTechniqueEnv",
     "make_pong_config",
