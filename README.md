@@ -659,12 +659,42 @@ models/passed/ppo_stage23_red.zip
 models/selfplay/stage23/
 ```
 
-## Validate All Stages
+## Stage 24: Mirror Champion Self-Play
 
-Run the full twenty-three-stage gate check:
+Stage 24 keeps Stage 23 intact and changes the growth loop: the current left
+champion is copied to the right side as a mirrored opponent, then the left side
+continues training against that newest mirror. When a new left candidate
+promotes, it is immediately copied back to the right mirror champion.
+
+Train, evaluate, and watch Stage 24:
 
 ```bash
-python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100 --stage18-episodes 30 --stage19-episodes 30 --stage20-episodes 30 --stage21-episodes 30 --stage22-episodes 30 --stage23-episodes 30
+python -m train.evolve_robot_arm_mirror_stage24 --start-generation 1 --generations 8 --timesteps-per-generation 120000
+python -m train.evaluate_robot_arm_mirror_stage24 --model-path models/passed/ppo_stage24 --mirror-model-path models/passed/ppo_stage24_right --episodes 30
+python -m play.watch_stage24 --model-path models/passed/ppo_stage24_left --mirror-model-path models/passed/ppo_stage24_right --seed 0
+```
+
+Export a Pygame-rendered mirror champion GIF:
+
+```bash
+SDL_VIDEODRIVER=dummy python -m play.watch_stage24 --gif-path logs/ppo_robot_arm_mirror_stage24/stage24_mirror_champion.gif --max-steps 1600
+```
+
+Stage 24 writes champions to:
+
+```text
+models/passed/ppo_stage24.zip
+models/passed/ppo_stage24_left.zip
+models/passed/ppo_stage24_right.zip
+models/selfplay/stage24/champion_gen_*.zip
+```
+
+## Validate All Stages
+
+Run the full twenty-four-stage gate check:
+
+```bash
+python -m train.validate_stages --episodes 200 --stage6-episodes 100 --stage7-episodes 100 --stage8-episodes 100 --stage9-episodes 100 --stage10-episodes 100 --stage11-episodes 100 --stage12-episodes 100 --stage13-episodes 100 --stage14-episodes 100 --stage15-episodes 100 --stage16-episodes 100 --stage17-episodes 100 --stage18-episodes 30 --stage19-episodes 30 --stage20-episodes 30 --stage21-episodes 30 --stage22-episodes 30 --stage23-episodes 30 --stage24-episodes 30
 ```
 
 Passing models are copied to:
@@ -693,6 +723,7 @@ models/passed/ppo_stage20.zip
 models/passed/ppo_stage21.zip
 models/passed/ppo_stage22.zip
 models/passed/ppo_stage23.zip
+models/passed/ppo_stage24.zip
 ```
 
 Validation metrics are written to `logs/validation/stage*.json`.

@@ -24,6 +24,7 @@ from pingpong_rl.envs import (
     RobotArmCleanAdaptiveAttackEnv,
     RobotArmGrandChampionAttackEnv,
     RobotArmLeagueEnv,
+    RobotArmMirrorSelfPlayEnv,
     RobotArmPingPongEnv,
     RobotArmRedScoringBilateralEnv,
     RobotArmTacticalLeagueEnv,
@@ -41,6 +42,7 @@ from pingpong_rl.envs.robot_arm_champion_attack_env import RobotArmChampionAttac
 from pingpong_rl.envs.robot_arm_clean_adaptive_attack_env import RobotArmCleanAdaptiveAttackConfig
 from pingpong_rl.envs.robot_arm_grand_champion_attack_env import RobotArmGrandChampionAttackConfig
 from pingpong_rl.envs.robot_arm_league_env import RobotArmLeagueConfig
+from pingpong_rl.envs.robot_arm_mirror_stage24_env import RobotArmMirrorSelfPlayConfig
 from pingpong_rl.envs.robot_arm_red_scoring_bilateral_env import RobotArmRedScoringBilateralConfig
 from pingpong_rl.envs.robot_arm_tactical_league_env import RobotArmTacticalLeagueConfig
 from pingpong_rl.envs.self_play_variety_env import SelfPlayVarietyConfig
@@ -78,6 +80,10 @@ from train.evaluate_robot_arm_red_scoring_bilateral import (
     default_red_scoring_bilateral_opponent_paths,
     evaluate_blue_red_scoring_bilateral_model,
     evaluate_red_scoring_challenge,
+)
+from train.evaluate_robot_arm_mirror_stage24 import (
+    default_mirror_stage24_opponent_paths,
+    evaluate_mirror_stage24_model,
 )
 from train.evaluate_robot_arm_league import default_robot_arm_opponent_paths, evaluate_robot_arm_league_model
 from train.evaluate_robot_arm_tactical import default_tactical_opponent_paths, evaluate_robot_arm_tactical_model
@@ -160,6 +166,13 @@ def _check_envs() -> None:
         RedRobotArmRedScoringBilateralEnv(
             config=RobotArmRedScoringBilateralConfig(
                 blue_model_paths=(str(ROOT / "models" / "passed" / "ppo_stage22_blue"),)
+            )
+        )
+    )
+    check_env(
+        RobotArmMirrorSelfPlayEnv(
+            config=RobotArmMirrorSelfPlayConfig(
+                opponent_model_paths=(str(ROOT / "models" / "passed" / "ppo_stage23_blue"),)
             )
         )
     )
@@ -495,6 +508,17 @@ def _stage_pass(stage: int, metrics: dict[str, Any]) -> tuple[bool, str]:
             and metrics["normal_end_rate"] >= 0.95,
             "pool_win_rate >= 0.60, red_challenge_win_rate >= 0.05, red_challenge_hit_rate >= 0.90, red_challenge_avg_rally_length >= 4.5, red_challenge_normal_end_rate >= 0.95, normal_end_rate >= 0.95",
         )
+    if stage == 24:
+        return (
+            metrics["mirror_win_rate"] >= 0.52
+            and metrics["pool_win_rate"] >= 0.62
+            and metrics["hit_rate"] >= 0.95
+            and metrics["avg_rally_length"] >= 5.5
+            and metrics["normal_end_rate"] >= 0.95
+            and metrics["forced_finish_rate"] >= 0.25
+            and metrics["stalemate_rate"] <= 0.25,
+            "mirror_win_rate >= 0.52, pool_win_rate >= 0.62, hit_rate >= 0.95, avg_rally_length >= 5.5, normal_end_rate >= 0.95, forced_finish_rate >= 0.25, stalemate_rate <= 0.25",
+        )
     raise ValueError(stage)
 
 
@@ -523,6 +547,7 @@ def _suggestion(stage: int) -> str:
         21: "python -m train.train_robot_arm_grand_champion_attack --generation 2 --base-model-path models/passed/ppo_stage21 --timesteps 120000",
         22: "python -m train.evolve_robot_arm_bilateral_league --start-generation 2 --generations 2 --train-side alternate --timesteps-per-generation 120000",
         23: "python -m train.evolve_robot_arm_red_scoring_bilateral --start-generation 1 --generations 6 --timesteps-per-generation 120000",
+        24: "python -m train.evolve_robot_arm_mirror_stage24 --start-generation 1 --generations 8 --timesteps-per-generation 120000",
     }
     return suggestions[stage]
 
@@ -665,6 +690,13 @@ def _print_table(results: list[StageResult]) -> None:
                 f"normal={metrics['normal_end_rate']:.3f}, forced={metrics['forced_finish_rate']:.3f}, "
                 f"stale={metrics['stalemate_rate']:.3f}, reward={metrics['avg_reward']:.3f}"
             )
+        elif result.stage == 24:
+            key_metrics = (
+                f"mirror={metrics['mirror_win_rate']:.3f}, pool={metrics['pool_win_rate']:.3f}, "
+                f"hit={metrics['hit_rate']:.3f}, rally={metrics['avg_rally_length']:.2f}, "
+                f"normal={metrics['normal_end_rate']:.3f}, forced={metrics['forced_finish_rate']:.3f}, "
+                f"stale={metrics['stalemate_rate']:.3f}, score={metrics['stage24_score']:.2f}"
+            )
         else:
             key_metrics = (
                 f"robot={metrics['robot_arm_enabled_rate']:.3f}, hit={metrics['hit_rate']:.3f}, "
@@ -690,7 +722,7 @@ def _print_table(results: list[StageResult]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate all twenty-three ping pong RL stages.")
+    parser = argparse.ArgumentParser(description="Validate all twenty-four ping pong RL stages.")
     parser.add_argument("--episodes", type=int, default=200)
     parser.add_argument("--stage6-episodes", type=int, default=100)
     parser.add_argument("--stage7-episodes", type=int, default=100)
@@ -710,6 +742,7 @@ def main() -> None:
     parser.add_argument("--stage21-episodes", type=int, default=30)
     parser.add_argument("--stage22-episodes", type=int, default=30)
     parser.add_argument("--stage23-episodes", type=int, default=30)
+    parser.add_argument("--stage24-episodes", type=int, default=30)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--skip-check-env", action="store_true")
     parser.add_argument("--json-dir", type=Path, default=ROOT / "logs" / "validation")
@@ -744,6 +777,7 @@ def main() -> None:
         21: _preferred_model_path(21, ROOT / "models" / "ppo_robot_arm_grand_champion_attack_stage21"),
         22: _preferred_model_path(22, ROOT / "models" / "passed" / "ppo_stage22_blue"),
         23: _preferred_model_path(23, ROOT / "models" / "passed" / "ppo_stage23_blue"),
+        24: _preferred_model_path(24, ROOT / "models" / "passed" / "ppo_stage24_left"),
     }
 
     raw_results: list[tuple[int, dict[str, Any], Path | None]] = [
@@ -897,6 +931,15 @@ def main() -> None:
         }
     )
     raw_results.append((23, stage23_blue_metrics, stage_models[23]))
+
+    stage24_metrics = evaluate_mirror_stage24_model(
+        stage_models[24],
+        ROOT / "models" / "passed" / "ppo_stage24_right",
+        default_mirror_stage24_opponent_paths(),
+        args.stage24_episodes,
+        seed=args.seed,
+    )
+    raw_results.append((24, stage24_metrics, stage_models[24]))
 
     results: list[StageResult] = []
     for stage, metrics, model_path in raw_results:
